@@ -40,6 +40,18 @@ const withRelations = {
   variants: { orderBy: [{ isDefault: "desc" }, { name: "asc" }] },
 } satisfies Prisma.ProductInclude;
 
+/** Cached pricing figures stored on Product (see PriceStats). */
+export type PriceSnapshot = {
+  currentPrice: number | null;
+  previousPrice: number | null;
+  lowestPrice: number | null;
+  highestPrice: number | null;
+  avg7Price: number | null;
+  avg30Price: number | null;
+  avg90Price: number | null;
+  priceUpdatedAt: Date;
+};
+
 export type ProductWithRelations = Prisma.ProductGetPayload<{ include: typeof withRelations }>;
 
 /** Stable, unique slug: readable title plus a short hash of the retailer listing identity. */
@@ -70,6 +82,31 @@ export function createProductRepository(client: DbClient) {
       return client.product.findUnique({
         where: { retailerId_externalId: { retailerId, externalId } },
         include: withRelations,
+      });
+    },
+
+    findManyByExternalIds(retailerId: string, externalIds: readonly string[]) {
+      return client.product.findMany({
+        where: { retailerId, externalId: { in: [...externalIds] } },
+        include: { variants: true },
+      });
+    },
+
+    updatePriceSnapshot(productId: string, snapshot: PriceSnapshot) {
+      return client.product.update({ where: { id: productId }, data: snapshot });
+    },
+
+    updateVariantPrice(
+      variantId: string,
+      data: { currentPrice: number | null; availability: Availability },
+    ) {
+      return client.productVariant.update({ where: { id: variantId }, data });
+    },
+
+    updateAvailability(productId: string, availability: Availability, seenAt: Date) {
+      return client.product.update({
+        where: { id: productId },
+        data: { availability, lastSeenAt: seenAt },
       });
     },
 

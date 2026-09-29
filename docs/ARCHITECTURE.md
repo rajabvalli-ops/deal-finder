@@ -781,66 +781,83 @@ HTTP status in one helper; no Prisma types leak to the UI (services return DTOs)
 
 ## 6. Retailer adapter architecture
 
-### Interface (sketch — not implemented)
+**Implemented in Stage 6** (`src/server/retailers/`, `src/server/services/ingestion/`).
+
+### Interface
 
 ```ts
 interface RetailerAdapter {
-  readonly key: string; // "mock", "awin-feed", …
-  readonly capabilities: {
-    catalogue: boolean; // can list/paginate products
-    priceLookup: boolean; // can fetch prices for known IDs
-    deepLinks: boolean; // can build affiliate deep links
-  };
-  fetchCatalogue(opts: {
-    cursor?: string;
+  readonly key: string; // "mock", later e.g. "awin-feed"
+  readonly allowedHosts: readonly string[]; // product/affiliate URLs must be https on one of these
+  readonly capabilities: { catalogue: boolean; priceLookup: boolean };
+  fetchCatalogue(req: {
+    cursor: string | null;
     limit: number;
-  }): Promise<{ items: NormalisedProduct[]; nextCursor?: string }>;
-  fetchPrices(externalIds: string[]): Promise<NormalisedPrice[]>;
-  buildAffiliateUrl(productUrl: string, ctx: { placement?: string }): string;
+  }): Promise<{ items: NormalisedProduct[]; nextCursor: string | null }>;
+  fetchPrices(productExternalIds: readonly string[]): Promise<NormalisedPriceUpdate[]>; // unknown IDs omitted
+  buildAffiliateUrl(productUrl: string): string;
   healthCheck(): Promise<{ ok: boolean; detail?: string }>;
 }
+type AdapterFactory = (config: unknown, context: { now: () => Date; env }) => RetailerAdapter;
 ```
 
-`NormalisedProduct` / `NormalisedPrice` are the _only_ shape the rest of the
-system understands: prices in pence, ISO currency, `Availability` enum, variants
-array, category hint string, image URL, rating, etc. Each adapter's output is
-validated with the shared Zod schema before ingestion — invalid items are
-counted as failures on the `ImportRun`, never written.
+Adapters only fetch and normalise — they never touch the database. The clock is injected so
+imports can be replayed (used for backfilling the mock catalogue). `NormalisedProduct`
+(`schemas.ts`) is the only shape the rest of the system understands: pence, ISO currency,
+availability enum, https URLs, 1–100 variants with exactly one default, optional free-text
+`categoryHint`.
 
-### Flow
+### Ingestion flow
 
 ```
-Retailer row (adapterKey="mock", adapterConfig={…})
+Retailer row (adapterKey="mock", adapterConfig={productCount: 24})
       │
       ▼
-registry.get(adapterKey)(config, secretsFromEnv) ──► RetailerAdapter instance
-      │  fetchCatalogue / fetchPrices
+registry.createAdapter(retailer, { now, env }) ──► RetailerAdapter
+      │  fetchCatalogue (paged, cursor) / fetchPrices
       ▼
-NormalisedProduct[]  ──Zod──►  ingestion.service
-      │                          • upsert Product by (retailerId, externalId)
-      │                          • upsert variants
-      │                          • append PriceHistory when changed / heartbeat
-      │                          • map category hint → Category (mapping table/rules)
-      │                          • ensure AffiliateLink via adapter.buildAffiliateUrl
-      ▼                          • recompute Product price snapshot (pricing engine)
-deal detection (next job)
+ingestion.service — per item, isolated (one bad item never stops a run):
+   1. Zod-validate against normalisedProductSchema           → else counted as failed
+   2. productUrl must be https on adapter.allowedHosts       → else counted as failed
+   3. categoryHint → slugify → Category by slug (null if no match)
+   4. in one transaction: upsert Product + variants by (retailerId, externalId);
+      append PriceHistory when price/stock/currency changed or ≥ 24h since the last
+      observation (heartbeat); recompute the Product price snapshot with computePriceStats
+   5. ImportRun row: counters, cursor, up to 20 error samples,
+      status SUCCEEDED / PARTIAL (some failed) / FAILED (all failed or adapter threw)
 ```
+
+`importCatalogue` stops after `maxPages` and returns `nextCursor` so a later run can resume
+(the jobs stage will use this to stay within function time limits). `importPrices` refreshes
+known listings; updates for unknown products or variants are counted as failures.
+
+### MockRetailerAdapter
+
+A fictional, deterministic catalogue (`adapters/mock/`): "Mockline" brand, `.invalid` URLs
+(RFC 2606), no images, category hints matching the seeded category slugs. Each product's
+price follows a fixed schedule from a hash of its ID and the date (a 2–5 day sale of 10–25%
+every 20–34 days; out of stock one day in 45), so development data has realistic history
+without randomness. `npm run import -- --backfill-days 90` replays the last 90 days into the
+dev database.
 
 ### Adding a second or third retailer
 
-1. Create `src/server/retailers/adapters/<name>/index.ts` implementing `RetailerAdapter`
-   (plus a feed/API client and a mapper from the source format to `NormalisedProduct`).
-2. Register it in `registry.ts`: `"<name>": (cfg, env) => new NameAdapter(cfg, env)`.
-3. Add its secret names to `env.ts` (Zod) and `.env.example`.
-4. Run the shared **adapter contract test kit** against it with recorded fixtures.
-5. Insert a `Retailer` row (via admin UI) with `adapterKey="<name>"`.
+1. Create `src/server/retailers/adapters/<name>/index.ts` exporting an `AdapterFactory`: parse
+   its `adapterConfig` with Zod, read secrets from `context.env`, map the source format to
+   `NormalisedProduct`, and declare `allowedHosts`.
+2. Register it: one line in `registry.ts` (`"<name>": create<Name>Adapter`).
+3. Add its secret names to `env.ts` and `.env.example`.
+4. In its test file, call `describeAdapterContract("<name>", …)` with an adapter backed by
+   recorded fixtures (no live network in CI). The kit checks pagination terminates without
+   duplicates, every item passes the schema, all product and affiliate URLs stay on allowed
+   hosts, price lookups match the catalogue and omit unknown IDs, output is deterministic for
+   a fixed clock, and the health check passes.
+5. Insert a `Retailer` row with `adapterKey="<name>"` (admin UI in a later stage).
 
-Nothing else changes: ingestion, pricing, deals, admin, public pages, affiliate
-redirects and alerts all operate on normalised data keyed by `retailerId`. Jobs
-iterate over `Retailer` rows with `status=ACTIVE`, so a new retailer is picked up
-automatically. A third retailer on the _same_ affiliate network (e.g. two
-merchants on one feed network) usually needs **no new code** — only a new
-`Retailer` row with a different `adapterConfig` (merchant ID).
+Nothing else changes: ingestion, pricing, deals, admin, public pages, affiliate redirects and
+alerts all operate on normalised data keyed by `retailerId`. A further merchant on an
+already-supported affiliate network needs **no new code** — only another `Retailer` row with a
+different `adapterConfig`.
 
 ---
 

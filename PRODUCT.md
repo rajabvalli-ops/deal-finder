@@ -119,4 +119,5 @@ structured data, clean SEO-friendly URLs.
 | 3     | Database                                  | ✅ Done     |
 | 4     | Pricing engine                            | ✅ Done     |
 | 5     | Deal engine & workflow                    | ✅ Done     |
-| 6+    | See roadmap in `docs/ARCHITECTURE.md` §13 | Not started |
+| 6     | Retailer adapters & ingestion             | ✅ Done     |
+| 7+    | See roadmap in `docs/ARCHITECTURE.md` §13 | Not started |

@@ -7,9 +7,11 @@ UK deal discovery and price-intelligence platform (working name).
 
 ## Status
 
-Stage 5 (deal engine). The schema, migrations, seed data, repository layer, the
-deterministic pricing engine (`src/server/pricing`), deal engine (`src/server/deals/engine`)
-and deal workflow (`src/server/deals/workflow.ts`) exist.
+Stage 6 (retailer adapters & ingestion). The schema, migrations, seed data, repository
+layer, pricing engine (`src/server/pricing`), deal engine and workflow (`src/server/deals`),
+retailer adapter framework with `MockRetailerAdapter` (`src/server/retailers`) and the
+ingestion service (`src/server/services/ingestion`) exist. Public routes are still
+placeholders; there is no authentication, admin area, scheduling or real retailer yet.
 Public routes are still placeholders; there is no authentication, admin area or
 retailer data yet.
 
@@ -26,6 +28,7 @@ cp .env.example .env
 docker compose up -d        # PostgreSQL 16 with `dealfinder` and `dealfinder_test` databases
 npm run db:migrate          # apply migrations
 npm run db:seed             # categories + the development-only mock retailer
+npm run import -- --backfill-days 90   # optional: 90 days of fictional price history
 npm run dev                 # http://localhost:3000
 ```
 

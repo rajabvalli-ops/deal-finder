@@ -24,8 +24,19 @@ export default defineConfig({
         "src/server/pricing/**",
         "src/server/deals/engine/**",
         "src/server/deals/workflow.ts",
+        "src/server/retailers/**",
+        "src/server/services/ingestion/observation-policy.ts",
+        "src/server/services/ingestion/price-snapshot.ts",
       ],
-      exclude: ["**/*.test.ts", "**/index.ts", "**/types.ts"],
+      exclude: [
+        "**/*.test.ts",
+        "**/*.test-kit.ts",
+        "**/types.ts",
+        // Re-export barrels only; adapters/mock/index.ts is real code and stays covered.
+        "src/server/pricing/index.ts",
+        "src/server/deals/engine/index.ts",
+        "src/server/retailers/index.ts",
+      ],
       // Pure logic must stay fully tested.
       thresholds: { lines: 100, functions: 100, branches: 100, statements: 100 },
     },
