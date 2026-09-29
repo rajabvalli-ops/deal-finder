@@ -10,3 +10,6 @@ test-results
 .vercel
 *.log
 .DS_Store
+next-env.d.ts
+*.tsbuildinfo
+!.env.example

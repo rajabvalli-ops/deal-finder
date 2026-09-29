@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+/* Design tokens. Original palette — adjust here, not in components. */
+@theme {
+  --color-brand-50: #eef6ff;
+  --color-brand-600: #1d5fd1;
+  --color-brand-700: #184ea9;
+  --color-saving-600: #0f7a4a;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f4f6f9;
+  --color-ink: #121826;
+  --color-ink-muted: #4b5565;
+  --color-line: #dde2ea;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-surface: #0e131c;
+    --color-surface-muted: #161d29;
+    --color-ink: #eef1f6;
+    --color-ink-muted: #a3adbd;
+    --color-line: #2a3342;
+    --color-brand-50: #13233d;
+  }
+}
+
+body {
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
