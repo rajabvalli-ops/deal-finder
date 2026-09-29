@@ -25,7 +25,8 @@
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
     "test:coverage": "vitest run --coverage",
-    "import": "tsx --conditions=react-server scripts/import.ts"
+    "import": "tsx --conditions=react-server scripts/import.ts",
+    "job": "tsx --conditions=react-server scripts/job.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.0",

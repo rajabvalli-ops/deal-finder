@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { Prisma } from "@/generated/prisma/client";
 import { slugify } from "@/lib/slug";
 import { inTransaction } from "../transaction";
+import type { DealStatus } from "@/generated/prisma/enums";
 import type { Availability, DbClient } from "../types";
 
 export type VariantInput = {
@@ -53,6 +54,14 @@ export type PriceSnapshot = {
 };
 
 export type ProductWithRelations = Prisma.ProductGetPayload<{ include: typeof withRelations }>;
+
+const detectionInclude = {
+  retailer: true,
+  category: true,
+  variants: { where: { isDefault: true } },
+} satisfies Prisma.ProductInclude;
+
+export type ProductForDetection = Prisma.ProductGetPayload<{ include: typeof detectionInclude }>;
 
 /** Stable, unique slug: readable title plus a short hash of the retailer listing identity. */
 export function productSlug(title: string, retailerId: string, externalId: string): string {
@@ -108,6 +117,56 @@ export function createProductRepository(client: DbClient) {
         where: { id: productId },
         data: { availability, lastSeenAt: seenAt },
       });
+    },
+
+    /** Marks a retailer's listings inactive when an import has not seen them since `before`. */
+    async deactivateNotSeenSince(retailerId: string, before: Date): Promise<number> {
+      const { count } = await client.product.updateMany({
+        where: { retailerId, isActive: true, lastSeenAt: { lt: before } },
+        data: { isActive: false },
+      });
+      return count;
+    },
+
+    /**
+     * Active listings to re-price, most important first: those with an active deal, then
+     * the ones priced longest ago.
+     */
+    async listForPriceRefresh(
+      retailerId: string,
+      activeDealStatuses: readonly DealStatus[],
+      limit: number,
+    ): Promise<{ id: string; externalId: string }[]> {
+      const select = { id: true, externalId: true } as const;
+      const withDeals = await client.product.findMany({
+        where: {
+          retailerId,
+          isActive: true,
+          deals: { some: { status: { in: [...activeDealStatuses] } } },
+        },
+        select,
+        take: limit,
+      });
+      const rest = await client.product.findMany({
+        where: { retailerId, isActive: true, id: { notIn: withDeals.map((p) => p.id) } },
+        select,
+        orderBy: [{ priceUpdatedAt: { sort: "asc", nulls: "first" } }, { id: "asc" }],
+        take: Math.max(0, limit - withDeals.length),
+      });
+      return [...withDeals, ...rest];
+    },
+
+    /** Active listings of active retailers whose prices were updated at or after `since`. */
+    listPricedSince(since: Date) {
+      return client.product.findMany({
+        where: { isActive: true, priceUpdatedAt: { gte: since }, retailer: { status: "ACTIVE" } },
+        include: detectionInclude,
+        orderBy: { id: "asc" },
+      });
+    },
+
+    findForDetection(productId: string) {
+      return client.product.findUnique({ where: { id: productId }, include: detectionInclude });
     },
 
     /**

@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": ["lhr1"],
+  "crons": [
+    { "path": "/api/cron/import-catalogue", "schedule": "17 4 * * *" },
+    { "path": "/api/cron/refresh-prices", "schedule": "7 */3 * * *" },
+    { "path": "/api/cron/detect-deals", "schedule": "37 * * * *" },
+    { "path": "/api/cron/expire-deals", "schedule": "47 * * * *" }
+  ]
+}

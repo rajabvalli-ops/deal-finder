@@ -11,6 +11,12 @@ const envSchema = z
       protocol: /^postgres(ql)?$/,
       error: "DATABASE_URL must be a postgres:// or postgresql:// connection string",
     }),
+    /** Bearer token Vercel Cron sends to /api/cron/*. Unset = cron endpoints refuse all calls. */
+    CRON_SECRET: z
+      .string()
+      .min(32, "CRON_SECRET must be at least 32 characters")
+      .optional()
+      .or(z.literal("").transform(() => undefined)),
   })
   .superRefine((value, ctx) => {
     if (value.NODE_ENV === "production" && !value.NEXT_PUBLIC_SITE_URL) {
@@ -24,6 +30,7 @@ const envSchema = z
   .transform((value) => ({
     NODE_ENV: value.NODE_ENV,
     DATABASE_URL: value.DATABASE_URL,
+    CRON_SECRET: value.CRON_SECRET,
     NEXT_PUBLIC_SITE_URL: (value.NEXT_PUBLIC_SITE_URL ?? DEFAULT_SITE_URL).replace(/\/+$/, ""),
   }));
 

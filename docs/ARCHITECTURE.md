@@ -953,35 +953,58 @@ lists match. Only PUBLISHED deals appear on the public site.
 
 ## 8. Background-job architecture
 
+**Implemented in Stage 7** (`src/server/jobs/`, `src/server/services/deals/`,
+`src/app/api/cron/[job]/route.ts`, `vercel.json`). Alert and notification jobs come with the
+alerts stage.
+
 ### Mechanism
 
-- **Scheduler:** Vercel Cron hits `/api/cron/*` route handlers, authenticated with
-  `Authorization: Bearer ${CRON_SECRET}`.
-- **Handlers are thin:** they call a job function in `src/server/jobs/` which calls
-  services. The same job functions can be run from a CLI script (`npm run job:x`)
-  locally and in tests.
-- **Chunking & resumability:** each run processes a bounded batch within the function
-  time limit and stores its `cursor` on `ImportRun`; the next invocation resumes.
-- **Idempotency:** upserts keyed by `(retailerId, externalId)`; notifications keyed
-  by `dedupeKey`; deal creation guarded by partial unique index.
-- **Concurrency:** Postgres advisory lock per `(job, retailerId)` so overlapping
-  cron invocations can't double-process.
-- **Observability:** `ImportRun` rows + structured logs; admin "Imports" page shows
-  run history and error samples.
-- **Scale path:** if volumes outgrow cron + chunking, swap the trigger layer for a
-  durable queue (Inngest or Upstash QStash) **without changing job functions**.
+- **Trigger:** Vercel Cron calls `GET /api/cron/<job>` with `Authorization: Bearer $CRON_SECRET`.
+  The token is compared in constant time (both sides SHA-256 hashed). No secret configured →
+  `503`; wrong or missing token → `401` (before revealing whether the job exists); unknown
+  job → `404`. Responses are `no-store`; `maxDuration` is 60s.
+- **Thin handlers:** the route calls `runScheduledJob(name)`; the same function backs
+  `npm run job -- <name>` locally and the integration tests.
+- **Mutual exclusion:** a `JobLock` table row per job with a lease (`INSERT … ON CONFLICT …
+WHERE lockedUntil <= now`), atomic across instances and safe behind connection poolers
+  (session advisory locks are not). A crashed run's lease expires (10–15 min); an overlapping
+  run returns `{ status: "skipped" }`.
+- **Bounded batches:** catalogue imports process at most 20 pages × 100 items per retailer per
+  run and resume from the last `ImportRun.cursor`; price refresh re-prices at most 200
+  listings per retailer per run.
+- **Isolation:** one retailer's failure (bad adapter key, feed down) is reported and the others
+  continue; one product's detection failure is counted and logged.
+- **Idempotency:** upserts by `(retailerId, externalId)`; write-on-change price history; the
+  one-active-deal-per-variant index (a concurrent duplicate insert counts as "unchanged").
 
-### Pipeline
+### Jobs
 
-| Job                   | Schedule (initial)                                | What it does                                                                                                                                                                            |
-| --------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Catalogue import      | daily per retailer                                | `adapter.fetchCatalogue` pages → ingestion (upsert products/variants, category mapping, affiliate links, price observation). Marks products not seen for N days inactive                |
-| Price refresh         | every 1–6h (per retailer config / API quota)      | `adapter.fetchPrices` for active products, prioritising products with active deals, alerts or high traffic → PriceHistory on change → recompute snapshot                                |
-| Deal detection        | after each price refresh (chained) + hourly sweep | For variants whose price changed: pricing engine → deal engine → create `PENDING_REVIEW` deal or update an existing active one                                                          |
-| Deal expiry           | every 15–30 min                                   | Expire published deals when price rises above deal price by > tolerance, item goes out of stock, `expiresAt` passes, or price not re-verified within X hours. Revalidate affected pages |
-| Alert matching        | after deal detection / price refresh              | For changed products, find active alerts where filters match and `current ≤ maxPrice` → create `Notification(PENDING)` with dedupe key                                                  |
-| Notification delivery | every 5 min                                       | Send PENDING notifications through `Notifier` with retries/backoff; mark SENT/FAILED                                                                                                    |
-| Analytics rollup      | nightly                                           | Aggregate clicks per deal/retailer/day; flag bot traffic                                                                                                                                |
+| Job                | Schedule (`vercel.json`, UTC) | What it does                                                                                                                                                                                                         |
+| ------------------ | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `import-catalogue` | daily 04:17                   | Per active retailer: import (or resume) the catalogue. After a **complete** pass, mark listings not seen for 3 days inactive. Then run deal detection on everything just priced.                                     |
+| `refresh-prices`   | every 3 h at :07              | Per active retailer with price lookup: re-price listings with active deals first, then the least recently priced. Then run deal detection on them.                                                                   |
+| `detect-deals`     | hourly at :37                 | Deal detection for listings priced in the last 26 h (safety net if a chained run was missed).                                                                                                                        |
+| `expire-deals`     | hourly at :47                 | Re-check every active deal: expire it if the product was delisted, its `expiresAt` passed, its price hasn't been re-checked for 48 h, it no longer passes the deal engine, or its variant stopped being the default. |
+
+Because detection is chained after imports and refreshes, the pipeline still works on a
+hosting plan that only allows daily cron jobs — deals would just be detected and expired
+less promptly. **Check your Vercel plan's cron limits before deploying**; some plans reject
+schedules that run more than once a day.
+
+### Deal detection (`deal-detection.service.ts`)
+
+For each listing's default variant: load a year of price history → `computePriceStats` →
+`evaluateDeal`, then reconcile with the variant's active deal (if any):
+
+| Engine says | No active deal                                           | Active deal exists                                                                                    |
+| ----------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| deal        | create as `PENDING_REVIEW` (via the workflow's `submit`) | if the **deal price** changed, refresh its snapshot; otherwise leave the detection-time numbers alone |
+| not a deal  | nothing                                                  | expire it (system actor, via the workflow)                                                            |
+
+`expire-deals` uses the same reconciliation but never creates deals and tolerates 48 h (not
+24 h) since the last price check. Every create, update and expiry writes an `AuditLog` row
+with a null actor and the reason. New deals get the product title and the engine's first
+reason as summary; the slug is the title plus a short hash.
 
 ---
 

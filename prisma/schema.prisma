@@ -567,3 +567,12 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([createdAt])
 }
+
+/// Lease-based mutual exclusion for background jobs. Works through connection poolers,
+/// unlike session-level advisory locks; an expired lease can be taken over after a crash.
+model JobLock {
+  name        String   @id
+  owner       String
+  lockedUntil DateTime @db.Timestamptz(3)
+  acquiredAt  DateTime @db.Timestamptz(3)
+}

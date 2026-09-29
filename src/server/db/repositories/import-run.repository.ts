@@ -34,6 +34,14 @@ export function createImportRunRepository(client: DbClient) {
       });
     },
 
+    /** The most recent run of a job type for a retailer (used to resume paged imports). */
+    latestFor(retailerId: string, jobType: ImportJobType) {
+      return client.importRun.findFirst({
+        where: { retailerId, jobType },
+        orderBy: [{ startedAt: "desc" }, { id: "desc" }],
+      });
+    },
+
     findById(id: string) {
       return client.importRun.findUnique({ where: { id } });
     },

@@ -8,6 +8,7 @@ describe("parseEnv", () => {
     expect(parseEnv({ NODE_ENV: "development", DATABASE_URL })).toEqual({
       NODE_ENV: "development",
       DATABASE_URL,
+      CRON_SECRET: undefined,
       NEXT_PUBLIC_SITE_URL: "http://localhost:3000",
     });
   });
@@ -59,6 +60,18 @@ describe("parseEnv", () => {
   it("rejects a non-Postgres DATABASE_URL", () => {
     expect(() => parseEnv({ DATABASE_URL: "mysql://u:p@host/db" })).toThrow(
       /postgres:\/\/ or postgresql:\/\//,
+    );
+  });
+
+  it("accepts a long CRON_SECRET and treats an empty one as unset", () => {
+    const secret = "x".repeat(32);
+    expect(parseEnv({ DATABASE_URL, CRON_SECRET: secret }).CRON_SECRET).toBe(secret);
+    expect(parseEnv({ DATABASE_URL, CRON_SECRET: "" }).CRON_SECRET).toBeUndefined();
+  });
+
+  it("rejects a short CRON_SECRET", () => {
+    expect(() => parseEnv({ DATABASE_URL, CRON_SECRET: "short" })).toThrow(
+      /at least 32 characters/,
     );
   });
 });

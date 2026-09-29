@@ -7,13 +7,10 @@ UK deal discovery and price-intelligence platform (working name).
 
 ## Status
 
-Stage 6 (retailer adapters & ingestion). The schema, migrations, seed data, repository
-layer, pricing engine (`src/server/pricing`), deal engine and workflow (`src/server/deals`),
-retailer adapter framework with `MockRetailerAdapter` (`src/server/retailers`) and the
-ingestion service (`src/server/services/ingestion`) exist. Public routes are still
-placeholders; there is no authentication, admin area, scheduling or real retailer yet.
-Public routes are still placeholders; there is no authentication, admin area or
-retailer data yet.
+Stage 7 (background jobs). Built so far: schema and migrations, repositories, the
+deterministic pricing and deal engines, the deal workflow, the retailer adapter framework
+with `MockRetailerAdapter`, ingestion, deal detection/expiry and scheduled jobs. Public
+routes are still placeholders; there is no authentication, admin area or real retailer yet.
 
 ## Requirements
 
