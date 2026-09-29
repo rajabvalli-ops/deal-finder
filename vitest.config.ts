@@ -23,6 +23,7 @@ export default defineConfig({
         "src/lib/slug.ts",
         "src/server/pricing/**",
         "src/server/deals/engine/**",
+        "src/server/deals/workflow.ts",
       ],
       exclude: ["**/*.test.ts", "**/index.ts", "**/types.ts"],
       // Pure logic must stay fully tested.

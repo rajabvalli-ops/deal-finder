@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createProductRepository } from "@/server/db/repositories/product.repository";
+import { ACTIVE_DEAL_STATUSES } from "@/server/deals/workflow";
 import { createRetailer, listingInput } from "./factories";
 import { testDb } from "./setup";
 
@@ -114,5 +115,12 @@ describe("database constraints", () => {
   it("refuses to delete a retailer that still has products", async () => {
     const { retailer } = await productWithVariant();
     await expect(testDb.retailer.delete({ where: { id: retailer.id } })).rejects.toThrow();
+  });
+
+  it("uses the workflow's active statuses in the one-active-deal index", async () => {
+    const [index] = await testDb.$queryRaw<{ indexdef: string }[]>`
+      SELECT indexdef FROM pg_indexes WHERE indexname = 'Deal_one_active_per_variant'`;
+    const statuses = [...(index?.indexdef.matchAll(/'([A-Z_]+)'/g) ?? [])].map((m) => m[1]);
+    expect(statuses.sort()).toEqual([...ACTIVE_DEAL_STATUSES].sort());
   });
 });

@@ -118,4 +118,5 @@ structured data, clean SEO-friendly URLs.
 | 2     | Project scaffold                          | ✅ Done     |
 | 3     | Database                                  | ✅ Done     |
 | 4     | Pricing engine                            | ✅ Done     |
-| 5+    | See roadmap in `docs/ARCHITECTURE.md` §13 | Not started |
+| 5     | Deal engine & workflow                    | ✅ Done     |
+| 6+    | See roadmap in `docs/ARCHITECTURE.md` §13 | Not started |

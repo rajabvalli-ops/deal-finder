@@ -878,40 +878,59 @@ Enforcement: ESLint blocks `Date.now()`, argument-less `new Date()`, `Math.rando
 `performance.now()` in engine code, and CI requires 100% test coverage of the engines and
 money helpers.
 
-### Deal engine — `evaluateDeal(stats, context, config)`
+### Deal engine — `evaluateDeal(input, config?)`
 
-1. **Eligibility gates** (all must pass, else no deal):
-   in stock; price observed within the last X hours; min history length (e.g. ≥ 14
-   days of coverage) so we don't trust a new listing's "was" price; retailer ACTIVE;
-   currency GBP.
-2. **Reference price** = the _most conservative_ credible comparison:
-   `min(previous, avg30, avg90)` among available values. This prevents inflated
-   "was" prices from generating fake discounts.
-3. **Thresholds**: `discountPct ≥ minDiscount` (e.g. 10%) AND `saving ≥ minSaving`
-   (e.g. £5), both configurable per category.
-4. **Signals → score 0–100** (weighted, each capped):
-   - depth of discount vs reference
-   - discount vs 90-day average
-   - proximity to historical low (at or below low = max points)
-   - absolute saving (log-scaled so £500 TVs don't dominate)
-   - retailer trust score
-   - social proof (rating/review count) — small weight
-   - penalty: price was raised shortly before the drop ("spike then drop" pattern)
-5. **Output**: `{ isDeal, score, referencePrice, referenceType, saving, discountBps,
-reasons: [...], breakdown: {...} }`. Reasons are human-readable strings shown
-   to admins ("22% below 90-day average", "Lowest price in 180 days").
-6. **Status**: new deals start as `PENDING_REVIEW`. Later, automation can
-   auto-approve above a configured score for trusted retailers.
+**Implemented in Stage 5** (`src/server/deals/engine/`, version `deal-engine@1`). Pure; input
+is the pricing engine's `PriceStats`, `now`, the retailer (`isActive`, `trustScore`) and the
+product (`rating`, `reviewCount`, `categorySlug`).
+
+1. **Price present**, else `NO_CURRENT_PRICE`.
+2. **Eligibility** (all failures reported together): available to buy; price checked within
+   **24h**; first observation ≥ **14 days** old; currency GBP; retailer active.
+3. **Reference price** = the **lowest** of: the previous price (only if it ended within
+   **60 days**), the 30-day average and the 90-day average. Ties prefer the previous price.
+   None available → `NO_REFERENCE_PRICE`; current price not below it → `NO_DISCOUNT`.
+   This is what defeats "raise then reduce" pricing: a £100 item raised to £150 for three
+   days and "reduced" to £120 is rejected because £120 is above its 30-day average.
+4. **Score 0–100**, from integer arithmetic only:
+
+   | Component        | Max | Full points when                                                  |
+   | ---------------- | --: | ----------------------------------------------------------------- |
+   | `discountDepth`  |  40 | ≥ 50% below the reference (linear)                                |
+   | `historicalLow`  |  20 | at or below the lowest recorded price; scales to 0 at 5% above it |
+   | `belowAverage90` |  15 | ≥ 30% below the 90-day average (linear)                           |
+   | `savingAmount`   |  10 | saving ≥ £100 (tiers: £5 → 2, £10 → 4, £25 → 6, £50 → 8)          |
+   | `retailerTrust`  |  10 | trust score 100 (linear)                                          |
+   | `socialProof`    |   5 | rating ≥ 4 with ≥ 50 reviews (≥ 10 reviews → 3; 3.5+ → 1)         |
+   | **Penalty**      | −15 | previous price > 10% above the 90-day average ("inflated was")    |
+
+5. **Thresholds** (defaults, overridable per category slug): discount ≥ **10%**, saving ≥
+   **£5**, score ≥ **35**. A candidate that misses a threshold is still returned with the
+   rejection codes, so thresholds can be tuned against real data.
+
+Output: `{ isDeal, candidate, rejections }`. `candidate` maps 1:1 onto the `Deal` snapshot
+columns (prices, reference type, saving, discount, score, `scoreBreakdown`, `engineVersion`)
+plus human-readable `reasons` for reviewers, e.g. _"19.7% below the 30-day average (£99.67)"_,
+_"Lowest price recorded"_. New deals are created as `PENDING_REVIEW` by the jobs stage.
 
 ### Deal workflow (state machine)
 
-```
-DETECTED → PENDING_REVIEW → APPROVED → PUBLISHED → EXPIRED
-                  │             │           │
-                  └→ REJECTED   └→ REJECTED └→ REMOVED
-```
+**Implemented in Stage 5** (`src/server/deals/workflow.ts`). One table defines every
+transition, who may make it (`system` = jobs/engine, `editor` = EDITOR/ADMIN) and which
+timestamp it sets; anything else is refused with `INVALID_TRANSITION` or `NOT_PERMITTED`.
 
-Transitions are defined in one table in `workflow.ts`; any other transition is refused.
+| Action    | From                                          | To             | Actors         | Sets          |
+| --------- | --------------------------------------------- | -------------- | -------------- | ------------- |
+| `submit`  | DETECTED                                      | PENDING_REVIEW | system, editor | —             |
+| `approve` | PENDING_REVIEW                                | APPROVED       | editor         | `reviewedAt`  |
+| `reject`  | DETECTED, PENDING_REVIEW, APPROVED            | REJECTED       | editor         | `reviewedAt`  |
+| `publish` | APPROVED                                      | PUBLISHED      | editor         | `publishedAt` |
+| `expire`  | DETECTED, PENDING_REVIEW, APPROVED, PUBLISHED | EXPIRED        | system, editor | `expiredAt`   |
+| `remove`  | APPROVED, PUBLISHED, EXPIRED                  | REMOVED        | editor         | —             |
+
+Active statuses (DETECTED, PENDING_REVIEW, APPROVED, PUBLISHED) are editable and are the
+ones covered by the one-active-deal-per-variant index — an integration test checks the two
+lists match. Only PUBLISHED deals appear on the public site.
 
 ---
 
