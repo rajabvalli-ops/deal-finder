@@ -13,6 +13,10 @@ describe("module boundaries", () => {
   it.each([
     ["src/app/(public)/page.tsx", 'import "@/server/db/client";'],
     ["src/app/(public)/page.tsx", 'import "@prisma/client";'],
+    ["src/app/(public)/page.tsx", 'import "@/generated/prisma/client";'],
+    ["src/components/public/deal-card.tsx", 'import "@/generated/prisma/enums";'],
+    ["src/server/services/deal.service.ts", 'import "@/generated/prisma/client";'],
+    ["src/server/services/deal.service.ts", 'import "../../generated/prisma/client";'],
     ["src/app/api/cron/import/route.ts", 'import "@/server/retailers/registry";'],
     ["src/components/public/deal-card.tsx", 'import "@/server/services/deal.service";'],
     ["src/lib/money.ts", 'import "@/server/env";'],
@@ -32,6 +36,8 @@ describe("module boundaries", () => {
     ["src/server/deals/engine/rules.ts", 'import "@/server/pricing/price-stats";'],
     ["src/server/services/ingestion.service.ts", 'import "@/server/retailers/registry";'],
     ["src/server/services/deal.service.ts", 'import "@/server/db/client";'],
+    ["src/server/db/client.ts", 'import "@/generated/prisma/client";'],
+    ["src/server/db/client.ts", 'import "@prisma/adapter-pg";'],
   ])("%s allows %s", async (filePath, source) => {
     expect(await restrictedImports(filePath, source)).toBe(0);
   });

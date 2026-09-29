@@ -7,6 +7,10 @@ const envSchema = z
   .object({
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
     NEXT_PUBLIC_SITE_URL: z.url({ protocol: /^https?$/ }).optional(),
+    DATABASE_URL: z.url({
+      protocol: /^postgres(ql)?$/,
+      error: "DATABASE_URL must be a postgres:// or postgresql:// connection string",
+    }),
   })
   .superRefine((value, ctx) => {
     if (value.NODE_ENV === "production" && !value.NEXT_PUBLIC_SITE_URL) {
@@ -19,6 +23,7 @@ const envSchema = z
   })
   .transform((value) => ({
     NODE_ENV: value.NODE_ENV,
+    DATABASE_URL: value.DATABASE_URL,
     NEXT_PUBLIC_SITE_URL: (value.NEXT_PUBLIC_SITE_URL ?? DEFAULT_SITE_URL).replace(/\/+$/, ""),
   }));
 

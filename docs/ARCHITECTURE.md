@@ -178,7 +178,22 @@ Key principles:
 
 ## 3. Proposed Prisma schema
 
-> Proposal only — not created yet. Will be refined in the database stage.
+> **Implemented in Stage 3.** [`prisma/schema.prisma`](../prisma/schema.prisma) and
+> `prisma/migrations/` are now the source of truth; the listing below is the original
+> proposal. Differences made during implementation:
+>
+> - **Prisma 7:** `prisma-client` generator writing to `src/generated/prisma` (git-ignored,
+>   generated on `postinstall`); connection URLs live in `prisma.config.ts`, not the schema;
+>   the runtime uses the `@prisma/adapter-pg` driver adapter.
+> - `Deal.variantId` is **required** (every product has a default variant), and
+>   `Deal.referenceType` is an enum (`ReferencePriceType`). `ImportRun.jobType` is an enum.
+> - All timestamps are `timestamptz`; explicit `onDelete` behaviour on every relation.
+> - Raw-SQL rules in the initial migration: CHECK constraints (non-negative pence, ISO
+>   currency format, rating 0–5, trust score 0–100, `saving = reference − deal price`,
+>   discount 0–10 000 bps, score 0–100, alert needs a keyword/product/category, category
+>   not its own parent), plus partial unique indexes for **one default variant per
+>   product** and **one active deal per variant**.
+> - Full-text search indexes are deferred to the search stage.
 
 ```prisma
 generator client {

@@ -7,8 +7,9 @@ UK deal discovery and price-intelligence platform (working name).
 
 ## Status
 
-Stage 2 (project scaffold). Public routes are placeholders; there is no database,
-authentication, admin area or retailer data yet.
+Stage 3 (database). The schema, migrations, seed data and repository layer exist.
+Public routes are still placeholders; there is no authentication, admin area or
+retailer data yet.
 
 ## Requirements
 
@@ -18,10 +19,15 @@ authentication, admin area or retailer data yet.
 ## Getting started
 
 ```bash
-npm install
-cp .env.example .env.local
-npm run dev            # http://localhost:3000
+npm install                 # also generates the Prisma client
+cp .env.example .env
+docker compose up -d        # PostgreSQL 16 with `dealfinder` and `dealfinder_test` databases
+npm run db:migrate          # apply migrations
+npm run db:seed             # categories + the development-only mock retailer
+npm run dev                 # http://localhost:3000
 ```
+
+No Docker? Any PostgreSQL 16 works — create the two databases and set the URLs in `.env`.
 
 ## Scripts
 

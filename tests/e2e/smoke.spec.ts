@@ -33,8 +33,8 @@ test("main navigation links work", async ({ page }) => {
   await expect(page).toHaveURL(/\/alerts$/);
 });
 
-test("health endpoint responds", async ({ request }) => {
+test("health endpoint reports the database as reachable", async ({ request }) => {
   const response = await request.get("/api/health");
   expect(response.status()).toBe(200);
-  expect(await response.json()).toEqual({ status: "ok" });
+  expect(await response.json()).toEqual({ status: "ok", database: "ok" });
 });

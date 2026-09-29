@@ -11,6 +11,10 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    // env.ts validates at import time; unit tests never connect, so a placeholder is enough.
+    env: {
+      DATABASE_URL: process.env.DATABASE_URL ?? "postgresql://unit-tests@localhost:5432/unused",
+    },
     include: ["src/**/*.test.ts", "tests/architecture/**/*.test.ts"],
   },
 });

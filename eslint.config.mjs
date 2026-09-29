@@ -5,7 +5,7 @@ import nextTs from "eslint-config-next/typescript";
 // Module boundaries from docs/ARCHITECTURE.md §1. Each entry restricts what a
 // layer may import, so the separation of concerns is enforced, not just documented.
 const PRISMA = {
-  group: ["@prisma/client", "@prisma/client/*"],
+  group: ["@prisma/*", "@/generated/*", "**/generated/prisma", "**/generated/prisma/*"],
   message: "Use a service; only src/server/db talks to Prisma.",
 };
 const DB = {
@@ -40,6 +40,7 @@ export default defineConfig([
     "playwright-report/**",
     "test-results/**",
     "next-env.d.ts",
+    "src/generated/**",
   ]),
   restrict(["src/app/**"], [PRISMA, DB, ADAPTERS]),
   restrict(["src/components/**"], [PRISMA, ANY_SERVER]),
@@ -52,4 +53,5 @@ export default defineConfig([
     [PRISMA, DB, ADAPTERS, FRAMEWORK],
   ),
   restrict(["src/server/retailers/**"], [PRISMA, DB]),
+  restrict(["src/server/services/**", "src/server/jobs/**"], [PRISMA]),
 ]);

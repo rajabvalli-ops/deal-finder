@@ -116,4 +116,5 @@ structured data, clean SEO-friendly URLs.
 | ----- | ----------------------------------------- | ----------- |
 | 1     | Architecture & PRODUCT.md                 | ✅ Done     |
 | 2     | Project scaffold                          | ✅ Done     |
-| 3+    | See roadmap in `docs/ARCHITECTURE.md` §13 | Not started |
+| 3     | Database                                  | ✅ Done     |
+| 4+    | See roadmap in `docs/ARCHITECTURE.md` §13 | Not started |
