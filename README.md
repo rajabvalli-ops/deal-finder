@@ -7,12 +7,12 @@ UK deal discovery and price-intelligence platform (working name).
 
 ## Status
 
-Stage 9 (admin dashboard). Built so far: schema and migrations, repositories, the
+Stage 10 (public website). Built so far: schema and migrations, repositories, the
 deterministic pricing and deal engines, the deal workflow, the retailer adapter framework
 with `MockRetailerAdapter`, ingestion, deal detection/expiry and scheduled jobs, email +
-password sign-in with roles, and the admin dashboard at `/admin` (deal review and
-publishing, products and price history, retailers, categories, users, alerts, clicks).
-Public pages are still placeholders; there is no real retailer yet.
+password sign-in with roles, the admin dashboard, and the public site (home, deals,
+deal pages with price history, categories, retailers). Outbound retailer links, search and
+alerts come next; there is no real retailer yet.
 
 ## Requirements
 

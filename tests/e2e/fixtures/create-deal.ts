@@ -1,5 +1,5 @@
 // Creates one clearly-labelled test product with a price drop and runs real deal detection,
-// so E2E tests always have a PENDING_REVIEW deal. Prints { dealId, productId, title } as JSON.
+// so E2E tests always have a PENDING_REVIEW deal. Prints its IDs and slugs as JSON.
 import "dotenv/config";
 import { randomUUID } from "node:crypto";
 import { db } from "@/server/db/client";
@@ -21,12 +21,16 @@ async function main() {
       integrationType: "MANUAL",
     },
   });
+  const category = await db.category.create({
+    data: { slug: `e2e-cat-${id}`, name: `E2E Category ${id}` },
+  });
   const title = `E2E Test Kettle ${id}`;
   const product = await createProductRepository(db).upsertListing({
     retailerId: retailer.id,
     externalId: `E2E-${id}`,
     title,
     productUrl: `https://e2e.invalid/p/${id}`,
+    categoryId: category.id,
     currency: "GBP",
     availability: "IN_STOCK",
     seenAt: now,
@@ -62,7 +66,16 @@ async function main() {
   await db.product.update({ where: { id: product.id }, data: { priceUpdatedAt: dropAt } });
   await createDealDetectionService(db).detectChanged({ now, since: dropAt });
   const deal = await db.deal.findFirstOrThrow({ where: { productId: product.id } });
-  console.log(JSON.stringify({ dealId: deal.id, productId: product.id, title }));
+  console.log(
+    JSON.stringify({
+      dealId: deal.id,
+      productId: product.id,
+      title,
+      slug: deal.slug,
+      retailerSlug: retailer.slug,
+      categorySlug: category.slug,
+    }),
+  );
 }
 
 main()

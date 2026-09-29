@@ -11,6 +11,7 @@ export async function updateRetailer(formData: FormData): Promise<void> {
   const parsed = retailerUpdateSchema.safeParse(formObject(formData));
   if (!parsed.success) backTo(null, "/admin/retailers", { error: "INVALID_INPUT" });
   const result = await adminCatalogue.updateRetailer({ actor, ...parsed.data, now: new Date() });
-  revalidatePath("/admin", "layout");
+  // Refresh cached public pages as well as the admin.
+  revalidatePath("/", "layout");
   backTo(null, "/admin/retailers", result.ok ? { notice: "saved" } : { error: result.error });
 }

@@ -15,7 +15,8 @@ export async function createCategory(formData: FormData): Promise<void> {
     input: parsed.data,
     now: new Date(),
   });
-  revalidatePath("/admin", "layout");
+  // Refresh cached public pages as well as the admin.
+  revalidatePath("/", "layout");
   backTo(null, "/admin/categories", result.ok ? { notice: "created" } : { error: result.error });
 }
 
@@ -25,6 +26,7 @@ export async function updateCategory(formData: FormData): Promise<void> {
   if (!parsed.success) backTo(null, "/admin/categories", { error: "INVALID_INPUT" });
   const { categoryId, ...input } = parsed.data;
   const result = await adminCatalogue.updateCategory({ actor, categoryId, input, now: new Date() });
-  revalidatePath("/admin", "layout");
+  // Refresh cached public pages as well as the admin.
+  revalidatePath("/", "layout");
   backTo(null, "/admin/categories", result.ok ? { notice: "saved" } : { error: result.error });
 }

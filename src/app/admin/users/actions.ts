@@ -12,6 +12,7 @@ export async function setUserRole(formData: FormData): Promise<void> {
   const parsed = userRoleSchema.safeParse(formObject(formData));
   if (!parsed.success) backTo(returnTo, "/admin/users", { error: "INVALID_INPUT" });
   const result = await adminUsers.setRole({ actor, ...parsed.data, now: new Date() });
-  revalidatePath("/admin", "layout");
+  // Refresh cached public pages as well as the admin.
+  revalidatePath("/", "layout");
   backTo(returnTo, "/admin/users", result.ok ? { notice: "saved" } : { error: result.error });
 }

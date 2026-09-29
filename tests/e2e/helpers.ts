@@ -16,7 +16,16 @@ export function setRole(email: string, role: "USER" | "EDITOR" | "ADMIN") {
   tsx("scripts/set-role.ts", email, role);
 }
 
-export function createDealFixture(): { dealId: string; productId: string; title: string } {
+export type DealFixture = {
+  dealId: string;
+  productId: string;
+  title: string;
+  slug: string;
+  retailerSlug: string;
+  categorySlug: string;
+};
+
+export function createDealFixture(): DealFixture {
   const output = tsx("tests/e2e/fixtures/create-deal.ts").trim().split("\n").at(-1)!;
   return JSON.parse(output);
 }

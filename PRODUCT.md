@@ -123,4 +123,5 @@ structured data, clean SEO-friendly URLs.
 | 7     | Background jobs & deal detection          | ✅ Done     |
 | 8     | Authentication & roles                    | ✅ Done     |
 | 9     | Admin dashboard                           | ✅ Done     |
-| 10+   | See roadmap in `docs/ARCHITECTURE.md` §13 | Not started |
+| 10    | Public website                            | ✅ Done     |
+| 11+   | See roadmap in `docs/ARCHITECTURE.md` §13 | Not started |

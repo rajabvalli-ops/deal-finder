@@ -14,7 +14,8 @@ export async function dealAction(formData: FormData): Promise<void> {
 
   const { dealId, action, reason } = parsed.data;
   const result = await adminDeals.applyAction({ actor, dealId, action, reason, now: new Date() });
-  revalidatePath("/admin", "layout");
+  // Refresh cached public pages as well as the admin.
+  revalidatePath("/", "layout");
   backTo(
     returnTo,
     `/admin/deals/${dealId}`,
@@ -30,7 +31,8 @@ export async function updateDealContent(formData: FormData): Promise<void> {
 
   const { dealId, ...content } = parsed.data;
   const result = await adminDeals.updateContent({ actor, dealId, content, now: new Date() });
-  revalidatePath("/admin", "layout");
+  // Refresh cached public pages as well as the admin.
+  revalidatePath("/", "layout");
   backTo(
     returnTo,
     `/admin/deals/${dealId}`,

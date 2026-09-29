@@ -798,6 +798,31 @@ HTTP status in one helper; no Prisma types leak to the UI (services return DTOs)
 
 ---
 
+### Public website (implemented in Stage 10)
+
+| Route                | Rendering                            | Content                                                                                                                             |
+| -------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `/`                  | Static, revalidated every 5 min      | Featured, latest, at/near historical low (within 3% of the low at detection), popular categories and retailers                      |
+| `/deals`             | Dynamic (`?sort=`, `?page=`)         | All live deals; sort newest / biggest discount / biggest saving / top picks                                                         |
+| `/deals/[slug]`      | ISR (rendered on first visit, 5 min) | Price, named comparison, price-checked time, 180-day chart, 7/30/90-day averages, low/high, product info, related deals, disclosure |
+| `/categories/[slug]` | Dynamic                              | Deals in the category and its subcategories, subcategory links                                                                      |
+| `/retailers/[slug]`  | Dynamic                              | The retailer's deals (disabled retailers 404)                                                                                       |
+
+- **What is public:** only `PUBLISHED` deals whose product is active and whose retailer is
+  `ACTIVE`; anything else 404s. `src/server/services/public/` maps rows to plain types in
+  `src/lib/public-types.ts`, so scores, reviewers and audit data never reach pages.
+- **Honest pricing (CMA guidance):** no bare "was" prices — every saving names its basis
+  ("21.8% below its 30-day average price of £219.99") and every deal shows when its price
+  was last checked, with a reminder to confirm the final price at the retailer.
+- **Affiliate disclosure** in the site footer and beside the price on each deal page.
+- **Caching:** admin Server Actions call `revalidatePath("/", "layout")`, so publishing,
+  editing or expiring a deal refreshes cached public pages immediately. Note: the homepage
+  is prerendered at build time, so **builds need database access**.
+- **No outbound link yet:** retailer links must go through the central affiliate system
+  (Stage 11); until then deal pages say the link is being set up rather than linking
+  directly.
+- Server-rendered with no client JavaScript on public pages; two-column cards on phones.
+
 ## 6. Retailer adapter architecture
 
 **Implemented in Stage 6** (`src/server/retailers/`, `src/server/services/ingestion/`).

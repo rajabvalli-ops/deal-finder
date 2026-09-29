@@ -25,6 +25,7 @@ export default defineConfig({
         "src/lib/chart.ts",
         "src/lib/format.ts",
         "src/lib/pagination.ts",
+        "src/lib/public-types.ts",
         "src/lib/security-headers.ts",
         "src/lib/validation/**",
         "src/server/auth/roles.ts",

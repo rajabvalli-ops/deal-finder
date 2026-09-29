@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { PriceChart } from "@/components/admin/price-chart";
+import { PriceChart } from "@/components/ui/price-chart";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { formatDateTime, humanise } from "@/lib/format";
 import { formatBps, formatPrice } from "@/lib/money";
