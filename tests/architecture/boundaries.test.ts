@@ -41,4 +41,24 @@ describe("module boundaries", () => {
   ])("%s allows %s", async (filePath, source) => {
     expect(await restrictedImports(filePath, source)).toBe(0);
   });
+
+  it.each([
+    ["src/server/pricing/price-stats.ts", "const t = Date.now();"],
+    ["src/server/pricing/price-stats.ts", "const t = new Date();"],
+    ["src/server/deals/engine/score.ts", "const r = Math.random();"],
+    ["src/server/deals/engine/score.ts", "const t = performance.now();"],
+  ])("%s may not read the clock or randomness: %s", async (filePath, source) => {
+    const [result] = await eslint.lintText(`${source}\nexport { };\n`, { filePath });
+    const ids = result?.messages.map((m) => m.ruleId) ?? [];
+    expect(
+      ids.some((id) => id === "no-restricted-properties" || id === "no-restricted-syntax"),
+    ).toBe(true);
+  });
+
+  it("engines may still construct dates from inputs", async () => {
+    const [result] = await eslint.lintText("export const d = (ms: number) => new Date(ms);\n", {
+      filePath: "src/server/pricing/price-stats.ts",
+    });
+    expect(result?.messages ?? []).toEqual([]);
+  });
 });

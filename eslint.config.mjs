@@ -52,6 +52,26 @@ export default defineConfig([
     ["src/server/pricing/**", "src/server/deals/engine/**"],
     [PRISMA, DB, ADAPTERS, FRAMEWORK],
   ),
+  {
+    // Engines must be deterministic: time is passed in, never read.
+    files: ["src/server/pricing/**", "src/server/deals/engine/**"],
+    ignores: ["**/*.test.ts"],
+    rules: {
+      "no-restricted-properties": [
+        "error",
+        { object: "Date", property: "now", message: "Pass `now` in; engines are deterministic." },
+        { object: "Math", property: "random", message: "Engines are deterministic." },
+        { object: "performance", property: "now", message: "Engines are deterministic." },
+      ],
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "NewExpression[callee.name='Date'][arguments.length=0]",
+          message: "Pass `now` in; engines are deterministic.",
+        },
+      ],
+    },
+  },
   restrict(["src/server/retailers/**"], [PRISMA, DB]),
   restrict(["src/server/services/**", "src/server/jobs/**"], [PRISMA]),
 ]);

@@ -849,19 +849,34 @@ merchants on one feed network) usually needs **no new code** — only a new
 No AI anywhere in numerical calculations. All functions are pure, integer-based,
 and versioned (`engineVersion`) so published results remain reproducible.
 
-### Pricing engine — `computePriceStats(history, now)`
+### Pricing engine — `computePriceStats(observations, now, config?)`
 
-Input: price observations for one variant (sorted), and `now`.
+**Implemented in Stage 4** (`src/server/pricing/`, version `pricing@1`). Pure function; any
+change to a calculation must bump the version.
 
-| Metric               | Definition                                                                                                                                                                                  |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `current`            | Latest observed price while in stock                                                                                                                                                        |
-| `previous`           | The most recent _different_ price that was held for ≥ N hours (default 24h) — ignores momentary blips                                                                                       |
-| `lowest` / `highest` | Min/max over full history (configurable window, e.g. 365d)                                                                                                                                  |
-| `avg7/30/90`         | **Time-weighted** average over the window: each price weighted by how long it was in effect (irregular sampling would otherwise bias a simple mean). `null` if coverage < 50% of the window |
-| `changePct`          | `(current − previous) / previous`, in bps                                                                                                                                                   |
-| `saving`             | `reference − current` (pence), where reference is chosen below                                                                                                                              |
-| `discountPct`        | `saving / reference`, in bps, rounded half-up                                                                                                                                               |
+Input: price observations for one variant (any order, one currency), and `now`.
+Observations after `now` are ignored. Each observation holds until the next one, capped
+at **72 hours** (`maxObservationGapMs`) so a listing that stops updating isn't assumed to
+keep its price forever. "Purchasable" means `IN_STOCK`, `LOW_STOCK`, `PREORDER` or
+`UNKNOWN` (feeds often omit stock); out-of-stock and discontinued prices are excluded
+from everything except `current`.
+
+| Metric                   | Definition                                                                                                                                                                                                                      |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `current`, `isAvailable` | Latest observed price, and whether that observation is purchasable. `currentSince` = start of the current price run                                                                                                             |
+| `previous`               | Walking back from the current run: the first purchasable price **different** from `current` that was held ≥ 24h. Short spikes are skipped. `previousUntil` says when it ended, so the deal engine can reject stale "was" prices |
+| `lowest` / `highest`     | Min/max purchasable price in the supplied history (the caller chooses the window when querying)                                                                                                                                 |
+| `avg7/30/90`             | **Time-weighted** average over the trailing window (each price weighted by how long it applied). `null` unless ≥ 50% of the window is covered by purchasable prices. Exact integer maths, rounded half-up to whole pence        |
+| `changeBps`              | `(current − previous) / previous` in basis points, rounded half away from zero                                                                                                                                                  |
+| `vsPrevious`             | `compareToReference(current, previous)` → `{ saving, discountBps }`; negative means a price rise                                                                                                                                |
+
+`compareToReference(price, reference)` is also exported for the deal engine, which chooses
+the reference (see below). Money helpers (`src/lib/money.ts`) provide `ratioToBps`,
+`parsePounds` (string → pence without floats), `formatPrice` and `formatBps`.
+
+Enforcement: ESLint blocks `Date.now()`, argument-less `new Date()`, `Math.random()` and
+`performance.now()` in engine code, and CI requires 100% test coverage of the engines and
+money helpers.
 
 ### Deal engine — `evaluateDeal(stats, context, config)`
 

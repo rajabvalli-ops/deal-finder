@@ -16,5 +16,17 @@ export default defineConfig({
       DATABASE_URL: process.env.DATABASE_URL ?? "postgresql://unit-tests@localhost:5432/unused",
     },
     include: ["src/**/*.test.ts", "tests/architecture/**/*.test.ts"],
+    coverage: {
+      provider: "v8",
+      include: [
+        "src/lib/money.ts",
+        "src/lib/slug.ts",
+        "src/server/pricing/**",
+        "src/server/deals/engine/**",
+      ],
+      exclude: ["**/*.test.ts", "**/index.ts", "**/types.ts"],
+      // Pure logic must stay fully tested.
+      thresholds: { lines: 100, functions: 100, branches: 100, statements: 100 },
+    },
   },
 });

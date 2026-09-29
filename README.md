@@ -7,7 +7,8 @@ UK deal discovery and price-intelligence platform (working name).
 
 ## Status
 
-Stage 3 (database). The schema, migrations, seed data and repository layer exist.
+Stage 4 (pricing engine). The schema, migrations, seed data, repository layer and the
+deterministic pricing engine (`src/server/pricing`) exist.
 Public routes are still placeholders; there is no authentication, admin area or
 retailer data yet.
 
