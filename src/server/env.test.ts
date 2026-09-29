@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parseEnv } from "./env";
 
 const DATABASE_URL = "postgresql://user:pass@localhost:5432/db";
+const BETTER_AUTH_SECRET = "a".repeat(32);
 
 describe("parseEnv", () => {
   it("defaults the site URL outside production", () => {
@@ -9,6 +10,7 @@ describe("parseEnv", () => {
       NODE_ENV: "development",
       DATABASE_URL,
       CRON_SECRET: undefined,
+      BETTER_AUTH_SECRET: "development-only-auth-secret-not-for-production",
       NEXT_PUBLIC_SITE_URL: "http://localhost:3000",
     });
   });
@@ -21,13 +23,14 @@ describe("parseEnv", () => {
     const env = parseEnv({
       NODE_ENV: "production",
       DATABASE_URL,
+      BETTER_AUTH_SECRET,
       NEXT_PUBLIC_SITE_URL: "https://example.co.uk/",
     });
     expect(env.NEXT_PUBLIC_SITE_URL).toBe("https://example.co.uk");
   });
 
   it("requires the site URL in production", () => {
-    expect(() => parseEnv({ NODE_ENV: "production", DATABASE_URL })).toThrow(
+    expect(() => parseEnv({ NODE_ENV: "production", DATABASE_URL, BETTER_AUTH_SECRET })).toThrow(
       /NEXT_PUBLIC_SITE_URL is required/,
     );
   });
@@ -73,5 +76,18 @@ describe("parseEnv", () => {
     expect(() => parseEnv({ DATABASE_URL, CRON_SECRET: "short" })).toThrow(
       /at least 32 characters/,
     );
+  });
+
+  it("requires BETTER_AUTH_SECRET in production and validates its length", () => {
+    const prod = {
+      NODE_ENV: "production",
+      DATABASE_URL,
+      NEXT_PUBLIC_SITE_URL: "https://x.example",
+    };
+    expect(() => parseEnv(prod)).toThrow(/BETTER_AUTH_SECRET is required in production/);
+    expect(() => parseEnv({ ...prod, BETTER_AUTH_SECRET: "short" })).toThrow(
+      /at least 32 characters/,
+    );
+    expect(parseEnv({ ...prod, BETTER_AUTH_SECRET }).BETTER_AUTH_SECRET).toBe(BETTER_AUTH_SECRET);
   });
 });

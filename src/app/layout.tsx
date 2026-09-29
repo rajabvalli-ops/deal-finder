@@ -39,6 +39,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     </Link>
                   </li>
                 ))}
+                <li>
+                  <Link href="/sign-in" className="hover:text-brand-600">
+                    Sign in
+                  </Link>
+                </li>
               </ul>
             </nav>
           </div>

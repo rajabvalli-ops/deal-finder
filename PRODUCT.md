@@ -121,4 +121,5 @@ structured data, clean SEO-friendly URLs.
 | 5     | Deal engine & workflow                    | ✅ Done     |
 | 6     | Retailer adapters & ingestion             | ✅ Done     |
 | 7     | Background jobs & deal detection          | ✅ Done     |
-| 8+    | See roadmap in `docs/ARCHITECTURE.md` §13 | Not started |
+| 8     | Authentication & roles                    | ✅ Done     |
+| 9+    | See roadmap in `docs/ARCHITECTURE.md` §13 | Not started |

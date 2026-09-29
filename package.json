@@ -26,11 +26,13 @@
     "db:studio": "prisma studio",
     "test:coverage": "vitest run --coverage",
     "import": "tsx --conditions=react-server scripts/import.ts",
-    "job": "tsx --conditions=react-server scripts/job.ts"
+    "job": "tsx --conditions=react-server scripts/job.ts",
+    "user:role": "tsx --conditions=react-server scripts/set-role.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.0",
     "@prisma/client": "7.10.0",
+    "better-auth": "1.7.6",
     "next": "16.3.7",
     "pg": "8.23.0",
     "react": "19.3.0",

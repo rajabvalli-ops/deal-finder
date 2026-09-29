@@ -21,6 +21,12 @@ export default defineConfig({
       include: [
         "src/lib/money.ts",
         "src/lib/slug.ts",
+        "src/lib/safe-redirect.ts",
+        "src/lib/security-headers.ts",
+        "src/lib/validation/**",
+        "src/server/auth/roles.ts",
+        "src/server/rate-limit/**",
+        "src/server/jobs/cron-auth.ts",
         "src/server/pricing/**",
         "src/server/deals/engine/**",
         "src/server/deals/workflow.ts",

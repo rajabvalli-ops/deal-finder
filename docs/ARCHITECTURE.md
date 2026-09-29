@@ -126,7 +126,7 @@ Key principles:
    (→ Product 0..1, → Deal 0..1)   (→ Deal/Product 0..1, anonymous allowed)
 
  Supporting tables (not in the original entity list, recommended):
-   Account / Session / VerificationToken ──► User      (Auth.js)
+   Account / Session / Verification ──► User           (Better Auth; RateLimit standalone)
    ImportRun ──► Retailer                              (job observability)
    AuditLog  ──► User                                  (admin action trail)
 ```
@@ -681,7 +681,7 @@ Notes:
 │   │   │   ├── retailers/ categories/ users/ alerts/ clicks/ imports/
 │   │   ├── go/[code]/route.ts               # outbound redirect + click tracking
 │   │   ├── api/
-│   │   │   ├── auth/[...nextauth]/route.ts
+│   │   │   ├── auth/[...all]/route.ts
 │   │   │   ├── cron/{import,refresh-prices,detect-deals,expire-deals,process-alerts,send-notifications}/route.ts
 │   │   │   ├── alerts/route.ts, alerts/[id]/route.ts
 │   │   │   ├── search/route.ts              # (optional JSON API for client filters)
@@ -723,7 +723,7 @@ Notes:
 │   │   ├── notifications/           # Notifier interface, email provider, templates
 │   │   ├── analytics/               # click aggregation, bot detection
 │   │   ├── jobs/                    # job handlers, locking, run bookkeeping
-│   │   ├── auth/                    # Auth.js config, requireRole(), session helpers
+│   │   ├── auth/                    # Better Auth config, requireRole(), session helpers
 │   │   ├── rate-limit/              # RateLimiter interface (memory / Upstash)
 │   │   └── env.ts                   # Zod-validated environment
 │   ├── lib/                         # isomorphic, dependency-free helpers
@@ -756,7 +756,7 @@ where an HTTP endpoint is genuinely required.
 | Endpoint                       | Method         | Auth                 | Purpose                               |
 | ------------------------------ | -------------- | -------------------- | ------------------------------------- |
 | `/go/[code]`                   | GET            | public, rate-limited | Record click, 302 to retailer         |
-| `/api/auth/[...nextauth]`      | *              | —                    | Auth.js                               |
+| `/api/auth/[...all]`           | *              | —                    | Better Auth                           |
 | `/api/alerts`                  | GET / POST     | user                 | List / create alerts                  |
 | `/api/alerts/[id]`             | PATCH / DELETE | owner                | Update / delete alert                 |
 | `/api/search`                  | GET            | public, rate-limited | JSON search for client-side filter UI |
@@ -1010,27 +1010,49 @@ reason as summary; the slug is the title plus a short hash.
 
 ## 9. Authentication & authorisation
 
-- **Auth.js (NextAuth v5)** with the Prisma adapter, database sessions.
-  - Users: email magic link (passwordless; no password storage to secure).
-  - Admins: same, plus optional Google/GitHub OAuth; admin accounts restricted
-    to an allow-list via `ADMIN_EMAILS` for bootstrap.
-- **Roles:** `USER`, `EDITOR` (review/publish deals), `ADMIN` (everything incl.
-  retailers, users).
+**Implemented in Stage 8** (`src/server/auth/`, `src/app/(auth)/`, `src/app/admin/layout.tsx`,
+`src/proxy.ts`, `next.config.ts`, `src/server/rate-limit/`).
+
+**Library: Better Auth 1.7** (decided in Stage 8, replacing the originally proposed Auth.js:
+Auth.js v5 never left beta and the project joined Better Auth). Data stays in our Postgres
+through Better Auth's Prisma adapter; the `User`/`Session`/`Account`/`Verification`/`RateLimit`
+tables follow its core schema (migration `…_better_auth`).
+
+- **Sign-in:** email + password (12–128 characters, hashed by Better Auth). Sessions last 30
+  days and are stored in the database. Other methods (Google, magic links) can be added as
+  Better Auth plugins/providers once their credentials or an email provider exist; email
+  verification waits for the email provider.
+- **Roles:** `USER` < `EDITOR` (review/publish deals) < `ADMIN` (also retailers and users),
+  stored on `User.role`. Declared to Better Auth with `input: false`, so a sign-up request can
+  never set it. **The first admin is created with `npm run user:role -- <email> ADMIN`**, which
+  needs direct database access and writes an audit-log entry. (An email allow-list was
+  rejected: without email verification anyone could register an allow-listed address.)
 - **Enforcement in depth:**
-  1. `proxy.ts` (Next 16's renamed middleware) redirects unauthenticated requests away from `/admin` (fast
-     path only — not trusted alone).
-  2. `admin/layout.tsx` calls `requireRole()` server-side.
-  3. **Every** Server Action / Route Handler calls `requireRole()` / ownership check
-     itself (actions are public endpoints).
-- Alerts require an account (verified email) — needed for UK GDPR consent and to
-  stop alerts being used to spam third parties.
-- Other security measures: Zod validation everywhere; Prisma parameterised queries
-  (raw SQL only via tagged `Prisma.sql`); CSP, HSTS, `X-Frame-Options`, `Referrer-Policy`
-  headers; Server Actions' built-in origin check; secrets only in Vercel env vars,
-  validated at boot by `env.ts`; `RateLimiter` interface (in-memory for dev,
-  Upstash Redis in prod) on `/go`, auth, alert creation, search; outbound redirect
-  URLs checked against the retailer's domain allow-list (no open redirect);
-  sanitise any HTML from feeds (render descriptions as text).
+  1. `src/proxy.ts` (Next 16's renamed middleware) redirects requests to `/admin` without a
+     session cookie to `/sign-in?next=…`. Fast path only — it never grants access.
+  2. `admin/layout.tsx` calls `requireRole("EDITOR")`: signed-out → sign in; signed in without
+     the role → **404**, so the admin area's existence isn't revealed.
+  3. Every future Server Action and Route Handler calls `requireRole()` itself.
+- **CSRF / origin:** Better Auth's origin check is forced on (`disableOriginCheck: false`); by
+  default it would switch itself off whenever `NODE_ENV=test` or `TEST` is set. Cookies are
+  `HttpOnly`, `SameSite=Lax`, and `Secure` in production. Server Actions have Next.js's own
+  origin check.
+- **Redirects:** `?next=` targets pass through `safeRedirectPath`, which only allows same-site
+  paths (and resolves the URL, because the parser strips tabs/newlines: `"/\t/evil.example"`).
+- **Account enumeration:** a wrong password and an unknown email return the same message.
+- **Rate limiting:** Better Auth's limiter uses the shared `RateLimit` table (works across
+  serverless instances): sign-in 5/minute and sign-up 5/hour per IP, 100/minute otherwise.
+  On in production, and exercised by an integration test. For our own endpoints,
+  `RateLimiter` (`src/server/rate-limit/`) is the interface; the in-memory implementation
+  suits development and single instances, and a shared-store implementation will back
+  `/go` and alerts in their stages.
+- **Security headers** (`src/lib/security-headers.ts`, applied in `next.config.ts`): CSP
+  (`default-src 'self'`, `frame-ancestors 'none'`, `object-src 'none'`, `base-uri`/`form-action
+'self'`; inline scripts allowed because Next.js inlines its bootstrap — a nonce-based CSP
+  can replace this later), `X-Content-Type-Options`, `X-Frame-Options: DENY`,
+  `Referrer-Policy`, `Permissions-Policy`, and HSTS in production. `X-Powered-By` is off.
+- **Secrets:** `BETTER_AUTH_SECRET` (≥ 32 characters) is required in production; development
+  and tests fall back to a fixed development-only value.
 
 ---
 
@@ -1122,7 +1144,7 @@ Each stage ends with passing tests and a summary; no stage starts without instru
 | 5   | Deal engine            | Pure rules/scoring/config + workflow state machine, unit tests                                                                          |
 | 6   | Retailer adapters      | Interface, Zod schemas, registry, contract test kit, `MockRetailerAdapter`, ingestion service                                           |
 | 7   | Background jobs        | Cron route handlers, job runner, locks, `ImportRun`, deal detection + expiry jobs                                                       |
-| 8   | Auth & roles           | Auth.js, roles, guards, proxy, security headers, rate-limiter interface                                                                 |
+| 8   | Auth & roles           | Better Auth, roles, guards, proxy, security headers, rate-limiter interface                                                             |
 | 9   | Admin dashboard        | Overview, deal review workflow, products + price-history inspector, retailers, categories, users, audit log                             |
 | 10  | Public website         | Home, deals list, deal page (with chart), category & retailer pages, design system, affiliate disclosure                                |
 | 11  | Affiliate & clicks     | `AffiliateLink`, `/go/[code]`, click recording, admin clicks view                                                                       |
@@ -1154,7 +1176,7 @@ Each stage ends with passing tests and a summary; no stage starts without instru
    `ProductGroup` matched by GTIN/brand+model — deferred, schema leaves room (`gtin`).
 5. **Serverless limits.** Large feed imports can exceed Vercel function duration;
    mitigated by chunking/cursors, with Inngest/QStash as the upgrade path.
-6. **Auth provider.** Proposed Auth.js (no vendor lock-in, data in our DB). Clerk
+6. **Auth provider — resolved in Stage 8:** Better Auth (see §9). Originally: proposed Auth.js (no vendor lock-in, data in our DB). Clerk
    would be faster to ship but adds cost/vendor dependency. Needs your preference.
 7. **Email provider** for alerts (Resend, Postmark, SES…) — not chosen; hidden
    behind a `Notifier` interface.

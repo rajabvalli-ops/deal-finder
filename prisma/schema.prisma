@@ -96,17 +96,19 @@ enum ImportRunStatus {
   FAILED
 }
 
-// ───────────── Users & auth (Auth.js-compatible) ─────────────
+// ───────────── Users & auth (Better Auth) ─────────────
+// User, Session, Account, Verification and RateLimit follow Better Auth's core schema
+// (better-auth 1.7). `role` is our own field; Better Auth never lets sign-up set it.
 
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  emailVerified DateTime? @db.Timestamptz(3)
-  name          String?
+  id            String   @id @default(cuid())
+  name          String   @default("")
+  email         String   @unique
+  emailVerified Boolean  @default(false)
   image         String?
-  role          Role      @default(USER)
-  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt     DateTime  @updatedAt @db.Timestamptz(3)
+  role          Role     @default(USER)
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @db.Timestamptz(3)
 
   accounts      Account[]
   sessions      Session[]
@@ -117,43 +119,62 @@ model User {
   auditLogs     AuditLog[]
 }
 
-model Account {
-  id                String  @id @default(cuid())
-  userId            String
-  type              String
-  provider          String
-  providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
-  expires_at        Int?
-  token_type        String?
-  scope             String?
-  id_token          String? @db.Text
-  session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([provider, providerAccountId])
-  @@index([userId])
-}
-
 model Session {
-  id           String   @id @default(cuid())
-  sessionToken String   @unique
-  userId       String
-  expires      DateTime @db.Timestamptz(3)
+  id        String   @id @default(cuid())
+  token     String   @unique
+  expiresAt DateTime @db.Timestamptz(3)
+  ipAddress String?
+  userAgent String?
+  userId    String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
 
-model VerificationToken {
-  identifier String
-  token      String   @unique
-  expires    DateTime @db.Timestamptz(3)
+/// A sign-in method for a user: "credential" (password hash) or an OAuth provider.
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  /// Password hash for providerId "credential". Never exposed outside the auth module.
+  password              String?
+  accessToken           String?   @db.Text
+  refreshToken          String?   @db.Text
+  idToken               String?   @db.Text
+  accessTokenExpiresAt  DateTime? @db.Timestamptz(3)
+  refreshTokenExpiresAt DateTime? @db.Timestamptz(3)
+  scope                 String?
+  createdAt             DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime  @updatedAt @db.Timestamptz(3)
 
-  @@unique([identifier, token])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+}
+
+/// Short-lived tokens (email verification, password reset, magic links).
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime @db.Timestamptz(3)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([identifier])
+}
+
+/// Better Auth's shared rate-limit counters (works across serverless instances).
+model RateLimit {
+  id          String @id @default(cuid())
+  key         String @unique
+  count       Int
+  lastRequest BigInt
 }
 
 // ───────────── Catalogue ─────────────
