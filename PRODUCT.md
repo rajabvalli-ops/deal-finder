@@ -122,4 +122,5 @@ structured data, clean SEO-friendly URLs.
 | 6     | Retailer adapters & ingestion             | ✅ Done     |
 | 7     | Background jobs & deal detection          | ✅ Done     |
 | 8     | Authentication & roles                    | ✅ Done     |
-| 9+    | See roadmap in `docs/ARCHITECTURE.md` §13 | Not started |
+| 9     | Admin dashboard                           | ✅ Done     |
+| 10+   | See roadmap in `docs/ARCHITECTURE.md` §13 | Not started |

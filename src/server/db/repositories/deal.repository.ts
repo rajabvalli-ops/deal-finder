@@ -60,6 +60,19 @@ export function createDealRepository(client: DbClient) {
       });
     },
 
+    updateContent(
+      id: string,
+      data: {
+        title: string;
+        summary: string | null;
+        description: string | null;
+        isFeatured: boolean;
+        expiresAt: Date | null;
+      },
+    ) {
+      return client.deal.update({ where: { id }, data });
+    },
+
     updateSnapshot(id: string, snapshot: DealSnapshot, summary: string | null) {
       return client.deal.update({
         where: { id },
@@ -76,10 +89,11 @@ export function createDealRepository(client: DbClient) {
       from: DealStatus,
       to: DealStatus,
       timestamps: Partial<Record<"reviewedAt" | "publishedAt" | "expiredAt", Date>> = {},
+      review: { reviewedById?: string; rejectionReason?: string | null } = {},
     ): Promise<boolean> {
       const { count } = await client.deal.updateMany({
         where: { id, status: from },
-        data: { status: to, ...timestamps },
+        data: { status: to, ...timestamps, ...review },
       });
       return count === 1;
     },

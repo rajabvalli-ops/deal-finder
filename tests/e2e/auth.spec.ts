@@ -1,22 +1,5 @@
-import { execFileSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
-import { expect, test, type Page } from "@playwright/test";
-
-const PASSWORD = "a long enough password";
-const uniqueEmail = () => `e2e-${randomUUID()}@example.test`;
-
-async function signUp(page: Page, email: string, next = "/") {
-  await page.goto(`/sign-up?next=${encodeURIComponent(next)}`);
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(PASSWORD);
-  await page.getByRole("button", { name: "Create account" }).click();
-}
-
-function setRole(email: string, role: string) {
-  execFileSync("npx", ["tsx", "--conditions=react-server", "scripts/set-role.ts", email, role], {
-    stdio: "pipe",
-  });
-}
+import { expect, test } from "@playwright/test";
+import { PASSWORD, setRole, signUp, uniqueEmail } from "./helpers";
 
 test("sends signed-out visitors from /admin to sign in", async ({ page }) => {
   await page.goto("/admin");
@@ -38,7 +21,7 @@ test("lets an editor into the admin area, then signs out", async ({ page }) => {
   setRole(email, "EDITOR");
 
   await page.goto("/admin");
-  await expect(page.getByRole("heading", { level: 1, name: "Admin" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Overview" })).toBeVisible();
   await expect(page.getByText(`Signed in as ${email}`)).toBeVisible();
 
   await page.getByRole("button", { name: "Sign out" }).click();

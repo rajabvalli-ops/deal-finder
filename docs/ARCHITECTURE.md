@@ -769,10 +769,29 @@ where an HTTP endpoint is genuinely required.
 | `/api/health`                  | GET            | public               | Liveness + DB check                   |
 | `/api/v1/*`                    | —              | API key              | _Future_ public/partner API           |
 
-Admin Server Actions (`src/app/admin/**/actions.ts`): `approveDeal`, `rejectDeal`,
-`updateDeal`, `publishDeal`, `expireDeal`, `removeDeal`, `updateRetailer`, … Each
-action: (1) `requireRole('EDITOR'|'ADMIN')`, (2) Zod-parse input, (3) call service,
-(4) write `AuditLog`, (5) `revalidateTag()` affected public pages.
+### Admin dashboard (implemented in Stage 9)
+
+| Page                       | Who         | What                                                                                                                 |
+| -------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------- |
+| `/admin`                   | EDITOR+     | Counts (deals by status, products, retailers, users, alerts, 7-day clicks), recent imports and audit                 |
+| `/admin/deals`             | EDITOR+     | Filter by status, search title/brand, paginate                                                                       |
+| `/admin/deals/[id]`        | EDITOR+     | Snapshot figures, engine reasons and score breakdown, 180-day price chart and stats, actions, edit form, audit trail |
+| `/admin/products`, `/[id]` | EDITOR+     | Search, active/delisted filter; variants, price chart, every observation, the product's deals                        |
+| `/admin/retailers`         | ADMIN edits | Status (active/paused/disabled) and trust score; editors see read-only                                               |
+| `/admin/categories`        | ADMIN edits | Tree view, create (slug from name), rename/move/reorder (slug fixed, cycles refused)                                 |
+| `/admin/users`             | ADMIN only  | Search/filter, change roles (not your own; never the last admin); 404 for editors                                    |
+| `/admin/alerts`, `/clicks` | EDITOR+     | Read-only lists (populated by later stages)                                                                          |
+
+Server Actions (`src/app/admin/**/actions.ts`): `dealAction` (approve / reject with a required
+reason / publish / expire / remove), `updateDealContent` (title, summary, description,
+featured, end date — never prices or scores), `updateRetailer`, `createCategory`,
+`updateCategory`, `setUserRole`. Each one: (1) `requireRole()` itself, (2) Zod-parses the
+form (`src/lib/validation/admin.ts`), (3) calls a service in `src/server/services/admin/`
+that re-checks the role, applies the workflow and writes the change **and** an `AuditLog`
+row with the acting user in one transaction, (4) `revalidatePath`, (5) redirects back with
+a result code (`?notice=` / `?error=`) that maps to a fixed message — no input is reflected.
+Deal status changes use optimistic concurrency, so two simultaneous approvals can't both
+succeed. Pages are server-rendered; the price chart is a plain SVG with no client JavaScript.
 
 Conventions: Zod on all input; typed `Result<T, E>` from services; errors mapped to
 HTTP status in one helper; no Prisma types leak to the UI (services return DTOs).

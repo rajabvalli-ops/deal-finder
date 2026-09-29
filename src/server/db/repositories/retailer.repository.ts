@@ -10,6 +10,10 @@ export function createRetailerRepository(client: DbClient) {
       return client.retailer.findUnique({ where: { slug } });
     },
 
+    update(id: string, data: { status: RetailerStatus; trustScore: number }): Promise<Retailer> {
+      return client.retailer.update({ where: { id }, data });
+    },
+
     listByStatus(status: RetailerStatus = RetailerStatus.ACTIVE): Promise<Retailer[]> {
       return client.retailer.findMany({ where: { status }, orderBy: { name: "asc" } });
     },

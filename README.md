@@ -7,11 +7,12 @@ UK deal discovery and price-intelligence platform (working name).
 
 ## Status
 
-Stage 8 (authentication). Built so far: schema and migrations, repositories, the
+Stage 9 (admin dashboard). Built so far: schema and migrations, repositories, the
 deterministic pricing and deal engines, the deal workflow, the retailer adapter framework
-with `MockRetailerAdapter`, ingestion, deal detection/expiry and scheduled jobs, and email +
-password sign-in with roles and a protected (placeholder) `/admin`. Public pages are still
-placeholders; there is no real retailer yet.
+with `MockRetailerAdapter`, ingestion, deal detection/expiry and scheduled jobs, email +
+password sign-in with roles, and the admin dashboard at `/admin` (deal review and
+publishing, products and price history, retailers, categories, users, alerts, clicks).
+Public pages are still placeholders; there is no real retailer yet.
 
 ## Requirements
 
@@ -62,6 +63,10 @@ No Docker? Any PostgreSQL 16 works — create the two databases and set the URLs
 | `npm run import`                      | Run a catalogue import (`--retailer <slug>`, `--backfill-days <n>` for the mock adapter)       |
 | `npm run job -- <name>`               | Run a background job now: `import-catalogue`, `refresh-prices`, `detect-deals`, `expire-deals` |
 | `npm run user:role -- <email> <role>` | Set an account's role (`USER`, `EDITOR`, `ADMIN`) — the only way to create an admin            |
+
+E2E tests run against `DATABASE_URL` and create uniquely-named test accounts, retailers
+and products there (prefixed "E2E"/"e2e-"). CI uses a throwaway database; locally, point
+`DATABASE_URL` at a database you don't mind accumulating test records in.
 
 First-time Playwright setup: `npx playwright install chromium`. To use an already
 installed Chromium instead, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`.
