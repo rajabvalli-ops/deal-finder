@@ -5,7 +5,7 @@ import nextTs from "eslint-config-next/typescript";
 // Module boundaries from docs/ARCHITECTURE.md §1. Each entry restricts what a
 // layer may import, so the separation of concerns is enforced, not just documented.
 const PRISMA = {
-  group: ["@prisma/client", "@prisma/client/*"],
+  group: ["@prisma/*", "@/generated/*", "**/generated/prisma", "**/generated/prisma/*"],
   message: "Use a service; only src/server/db talks to Prisma.",
 };
 const DB = {
@@ -40,6 +40,7 @@ export default defineConfig([
     "playwright-report/**",
     "test-results/**",
     "next-env.d.ts",
+    "src/generated/**",
   ]),
   restrict(["src/app/**"], [PRISMA, DB, ADAPTERS]),
   restrict(["src/components/**"], [PRISMA, ANY_SERVER]),
@@ -51,5 +52,28 @@ export default defineConfig([
     ["src/server/pricing/**", "src/server/deals/engine/**"],
     [PRISMA, DB, ADAPTERS, FRAMEWORK],
   ),
+  {
+    // Engines must be deterministic: time is passed in, never read.
+    files: ["src/server/pricing/**", "src/server/deals/engine/**"],
+    ignores: ["**/*.test.ts"],
+    rules: {
+      "no-restricted-properties": [
+        "error",
+        { object: "Date", property: "now", message: "Pass `now` in; engines are deterministic." },
+        { object: "Math", property: "random", message: "Engines are deterministic." },
+        { object: "performance", property: "now", message: "Engines are deterministic." },
+      ],
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "NewExpression[callee.name='Date'][arguments.length=0]",
+          message: "Pass `now` in; engines are deterministic.",
+        },
+      ],
+    },
+  },
+  // Click and link-code helpers: pure functions, unit tested without a database or framework.
+  restrict(["src/server/affiliate/**"], [PRISMA, DB, ADAPTERS, FRAMEWORK]),
   restrict(["src/server/retailers/**"], [PRISMA, DB]),
+  restrict(["src/server/services/**", "src/server/jobs/**"], [PRISMA]),
 ]);

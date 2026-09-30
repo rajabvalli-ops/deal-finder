@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 const shells = [
-  { path: "/", heading: "Deal Finder" },
+  { path: "/", heading: "Genuine price drops from UK retailers" },
   { path: "/deals", heading: "Latest deals" },
   { path: "/search", heading: "Search" },
   { path: "/alerts", heading: "Price alerts" },
@@ -17,7 +17,7 @@ for (const { path, heading } of shells) {
 }
 
 for (const path of ["/deals/anything", "/categories/anything", "/retailers/anything"]) {
-  test(`${path} is a 404 until data exists`, async ({ page }) => {
+  test(`${path} is a 404 for an unknown slug`, async ({ page }) => {
     const response = await page.goto(path);
     expect(response?.status()).toBe(404);
     await expect(page.getByRole("heading", { name: "Page not found" })).toBeVisible();
@@ -33,8 +33,8 @@ test("main navigation links work", async ({ page }) => {
   await expect(page).toHaveURL(/\/alerts$/);
 });
 
-test("health endpoint responds", async ({ request }) => {
+test("health endpoint reports the database as reachable", async ({ request }) => {
   const response = await request.get("/api/health");
   expect(response.status()).toBe(200);
-  expect(await response.json()).toEqual({ status: "ok" });
+  expect(await response.json()).toEqual({ status: "ok", database: "ok" });
 });
