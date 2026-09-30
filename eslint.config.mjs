@@ -72,6 +72,8 @@ export default defineConfig([
       ],
     },
   },
+  // Click and link-code helpers: pure functions, unit tested without a database or framework.
+  restrict(["src/server/affiliate/**"], [PRISMA, DB, ADAPTERS, FRAMEWORK]),
   restrict(["src/server/retailers/**"], [PRISMA, DB]),
   restrict(["src/server/services/**", "src/server/jobs/**"], [PRISMA]),
 ]);

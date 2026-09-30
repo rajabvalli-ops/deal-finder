@@ -448,6 +448,7 @@ model DealTag {
 // ───────────── Affiliate & clicks ─────────────
 
 /// The only place outbound retailer URLs are stored. Public links use /go/[code].
+/// Ingestion keeps one product-level link (dealId null) per product (partial unique index).
 model AffiliateLink {
   id             String   @id @default(cuid())
   /// Short opaque identifier used in /go/[code].

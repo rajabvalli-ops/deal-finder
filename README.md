@@ -7,12 +7,13 @@ UK deal discovery and price-intelligence platform (working name).
 
 ## Status
 
-Stage 10 (public website). Built so far: schema and migrations, repositories, the
-deterministic pricing and deal engines, the deal workflow, the retailer adapter framework
-with `MockRetailerAdapter`, ingestion, deal detection/expiry and scheduled jobs, email +
-password sign-in with roles, the admin dashboard, and the public site (home, deals,
-deal pages with price history, categories, retailers). Outbound retailer links, search and
-alerts come next; there is no real retailer yet.
+Stage 11 (affiliate links and click tracking). Built so far: schema and migrations,
+repositories, the deterministic pricing and deal engines, the deal workflow, the retailer
+adapter framework with `MockRetailerAdapter`, ingestion, deal detection/expiry and scheduled
+jobs, email + password sign-in with roles, the admin dashboard, the public site (home,
+deals, deal pages with price history, categories, retailers), and outbound links through
+`/go/[code]` with click recording. Search and alerts come next. There is no real retailer
+yet: mock links point at the fictional `mock-retailer.invalid`, which does not resolve.
 
 ## Requirements
 
@@ -95,6 +96,14 @@ values. See `.env.example` for the full list.
   repositories and services (enforced by ESLint).
 - The seed creates reference categories and, outside production, a clearly fake
   `mock-retailer` (`.invalid` domain). It never creates products or prices.
+
+## Outbound links
+
+Retailer URLs are stored only in `AffiliateLink` rows. Each catalogue import builds them with
+the retailer's adapter. Pages link to `/go/<code>`, which records the click and redirects.
+To give already-imported products their links, run `npm run import` (or wait for the daily
+catalogue job). Clicks are listed under `/admin/clicks`. IP addresses are stored only as a
+daily-rotating keyed hash. Details: `docs/ARCHITECTURE.md` §10.
 
 ## Background jobs
 

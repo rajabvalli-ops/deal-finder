@@ -20,6 +20,7 @@ export default defineConfig({
       provider: "v8",
       include: [
         "src/lib/money.ts",
+        "src/lib/outbound.ts",
         "src/lib/slug.ts",
         "src/lib/safe-redirect.ts",
         "src/lib/chart.ts",
@@ -28,6 +29,7 @@ export default defineConfig({
         "src/lib/public-types.ts",
         "src/lib/security-headers.ts",
         "src/lib/validation/**",
+        "src/server/affiliate/**",
         "src/server/auth/roles.ts",
         "src/server/rate-limit/**",
         "src/server/jobs/cron-auth.ts",
@@ -46,6 +48,7 @@ export default defineConfig({
         "src/server/pricing/index.ts",
         "src/server/deals/engine/index.ts",
         "src/server/retailers/index.ts",
+        "src/server/affiliate/index.ts",
       ],
       // Pure logic must stay fully tested.
       thresholds: { lines: 100, functions: 100, branches: 100, statements: 100 },

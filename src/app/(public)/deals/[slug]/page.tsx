@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { AffiliateDisclosure } from "@/components/public/affiliate-disclosure";
 import { Breadcrumbs, type Crumb } from "@/components/public/breadcrumbs";
 import { DealGrid } from "@/components/public/deal-card";
+import { OutboundButton } from "@/components/public/outbound-button";
 import { PriceBlock } from "@/components/public/price-block";
 import { ProductImage } from "@/components/public/product-image";
 import { PriceChart } from "@/components/ui/price-chart";
@@ -98,9 +99,18 @@ export default async function DealPage({ params }: Props) {
             — check the final price at {deal.retailer.name} before you buy.
           </p>
 
-          <p className="rounded-lg border border-dashed border-line p-4 text-sm text-ink-muted">
-            The link to {deal.retailer.name} is being set up and will appear here shortly.
-          </p>
+          {deal.linkCode ? (
+            <OutboundButton
+              code={deal.linkCode}
+              retailerName={deal.retailer.name}
+              placement="deal-page"
+              dealSlug={deal.slug}
+            />
+          ) : (
+            <p className="rounded-lg border border-dashed border-line p-4 text-sm text-ink-muted">
+              The link to {deal.retailer.name} isn&apos;t available right now.
+            </p>
+          )}
 
           <AffiliateDisclosure />
         </div>

@@ -74,6 +74,17 @@ export function createAdminRepository(client: DbClient) {
           category: true,
           variants: { orderBy: [{ isDefault: "desc" }, { name: "asc" }] },
           deals: { orderBy: { detectedAt: "desc" }, take: 20 },
+          affiliateLinks: {
+            where: { dealId: null },
+            select: {
+              code: true,
+              destinationUrl: true,
+              network: true,
+              isActive: true,
+              updatedAt: true,
+              _count: { select: { clicks: { where: { isBot: false } } } },
+            },
+          },
         },
       });
     },
@@ -127,19 +138,54 @@ export function createAdminRepository(client: DbClient) {
       return { items, total };
     },
 
-    async listClicks(paging: Paging) {
+    /** Newest first. Bot clicks are left out unless asked for. */
+    async listClicks(filter: { includeBots?: boolean } & Paging) {
+      const where: Prisma.ClickWhereInput = filter.includeBots ? {} : { isBot: false };
       const [items, total] = await Promise.all([
         client.click.findMany({
+          where,
           include: {
-            deal: { select: { title: true } },
+            deal: { select: { id: true, title: true } },
+            product: { select: { id: true, title: true } },
             affiliateLink: { select: { retailer: { select: { name: true } } } },
           },
           orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-          ...paging,
+          skip: filter.skip,
+          take: filter.take,
         }),
-        client.click.count(),
+        client.click.count({ where }),
       ]);
       return { items, total };
+    },
+
+    /** Click totals since a date, and the deals people clicked most (bots excluded). */
+    async clickSummary(since: Date, topDeals = 5) {
+      const window = { createdAt: { gte: since } };
+      const [people, bots, grouped] = await Promise.all([
+        client.click.count({ where: { ...window, isBot: false } }),
+        client.click.count({ where: { ...window, isBot: true } }),
+        client.click.groupBy({
+          by: ["dealId"],
+          where: { ...window, isBot: false, dealId: { not: null } },
+          _count: { _all: true },
+          orderBy: [{ _count: { dealId: "desc" } }, { dealId: "asc" }],
+          take: topDeals,
+        }),
+      ]);
+      const deals = await client.deal.findMany({
+        where: { id: { in: grouped.map((g) => g.dealId!) } },
+        select: { id: true, title: true },
+      });
+      const titles = new Map(deals.map((d) => [d.id, d.title]));
+      return {
+        people,
+        bots,
+        topDeals: grouped.map((g) => ({
+          dealId: g.dealId!,
+          title: titles.get(g.dealId!) ?? "(deleted deal)",
+          clicks: g._count._all,
+        })),
+      };
     },
 
     async overview(since: Date) {

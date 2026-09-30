@@ -26,6 +26,9 @@ describe("module boundaries", () => {
     ["src/server/deals/engine/rules.ts", 'import "react";'],
     ["src/server/deals/engine/rules.ts", 'import "@/server/retailers/types";'],
     ["src/server/retailers/adapters/mock/index.ts", 'import "@/server/db/client";'],
+    ["src/server/affiliate/click-meta.ts", 'import "@/server/db/client";'],
+    ["src/server/affiliate/click-meta.ts", 'import "next/server";'],
+    ["src/server/affiliate/codes.ts", 'import "@/server/retailers";'],
   ])("%s rejects %s", async (filePath, source) => {
     expect(await restrictedImports(filePath, source)).toBe(1);
   });
@@ -38,6 +41,8 @@ describe("module boundaries", () => {
     ["src/server/services/deal.service.ts", 'import "@/server/db/client";'],
     ["src/server/db/client.ts", 'import "@/generated/prisma/client";'],
     ["src/server/db/client.ts", 'import "@prisma/adapter-pg";'],
+    ["src/app/go/[code]/route.ts", 'import "@/server/services/affiliate";'],
+    ["src/server/affiliate/click-meta.ts", 'import "node:crypto";'],
   ])("%s allows %s", async (filePath, source) => {
     expect(await restrictedImports(filePath, source)).toBe(0);
   });

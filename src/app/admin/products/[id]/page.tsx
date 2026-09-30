@@ -114,6 +114,30 @@ export default async function AdminProductPage({ params }: { params: Promise<{ i
       ) : null}
 
       <section className="space-y-2">
+        <h2 className="text-lg font-semibold">Outbound link</h2>
+        {product.affiliateLinks[0] ? (
+          <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-1 text-sm">
+            <dt className="text-ink-muted">Public link</dt>
+            <dd className="font-mono">/go/{product.affiliateLinks[0].code}</dd>
+            <dt className="text-ink-muted">Goes to</dt>
+            <dd className="break-all">{product.affiliateLinks[0].destinationUrl}</dd>
+            <dt className="text-ink-muted">Built by</dt>
+            <dd>{product.affiliateLinks[0].network ?? "—"} adapter</dd>
+            <dt className="text-ink-muted">Status</dt>
+            <dd>{product.affiliateLinks[0].isActive ? "Active" : "Inactive"}</dd>
+            <dt className="text-ink-muted">Clicks by people</dt>
+            <dd className="tabular-nums">{product.affiliateLinks[0]._count.clicks}</dd>
+            <dt className="text-ink-muted">Last updated</dt>
+            <dd>{formatDateTime(product.affiliateLinks[0].updatedAt)}</dd>
+          </dl>
+        ) : (
+          <p className="text-sm text-ink-muted">
+            No outbound link yet. The next catalogue import for this retailer creates it.
+          </p>
+        )}
+      </section>
+
+      <section className="space-y-2">
         <h2 className="text-lg font-semibold">Deals</h2>
         {product.deals.length === 0 ? (
           <p className="text-sm text-ink-muted">No deals detected for this product.</p>

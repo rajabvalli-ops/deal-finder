@@ -23,6 +23,7 @@ export type DealFixture = {
   slug: string;
   retailerSlug: string;
   categorySlug: string;
+  linkCode: string;
 };
 
 export function createDealFixture(): DealFixture {

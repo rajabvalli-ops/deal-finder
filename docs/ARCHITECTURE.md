@@ -755,7 +755,7 @@ where an HTTP endpoint is genuinely required.
 
 | Endpoint                       | Method         | Auth                 | Purpose                               |
 | ------------------------------ | -------------- | -------------------- | ------------------------------------- |
-| `/go/[code]`                   | GET            | public, rate-limited | Record click, 302 to retailer         |
+| `/go/[code]`                   | GET / HEAD     | public, rate-limited | Record click, 302 to retailer         |
 | `/api/auth/[...all]`           | *              | —                    | Better Auth                           |
 | `/api/alerts`                  | GET / POST     | user                 | List / create alerts                  |
 | `/api/alerts/[id]`             | PATCH / DELETE | owner                | Update / delete alert                 |
@@ -780,7 +780,8 @@ where an HTTP endpoint is genuinely required.
 | `/admin/retailers`         | ADMIN edits | Status (active/paused/disabled) and trust score; editors see read-only                                               |
 | `/admin/categories`        | ADMIN edits | Tree view, create (slug from name), rename/move/reorder (slug fixed, cycles refused)                                 |
 | `/admin/users`             | ADMIN only  | Search/filter, change roles (not your own; never the last admin); 404 for editors                                    |
-| `/admin/alerts`, `/clicks` | EDITOR+     | Read-only lists (populated by later stages)                                                                          |
+| `/admin/alerts`            | EDITOR+     | Read-only list (populated by the alerts stage)                                                                       |
+| `/admin/clicks`            | EDITOR+     | 7-day clicks by people vs likely bots, most-clicked deals, click list (bots hidden unless asked for) — Stage 11      |
 
 Server Actions (`src/app/admin/**/actions.ts`): `dealAction` (approve / reject with a required
 reason / publish / expire / remove), `updateDealContent` (title, summary, description,
@@ -818,9 +819,8 @@ HTTP status in one helper; no Prisma types leak to the UI (services return DTOs)
 - **Caching:** admin Server Actions call `revalidatePath("/", "layout")`, so publishing,
   editing or expiring a deal refreshes cached public pages immediately. Note: the homepage
   is prerendered at build time, so **builds need database access**.
-- **No outbound link yet:** retailer links must go through the central affiliate system
-  (Stage 11); until then deal pages say the link is being set up rather than linking
-  directly.
+- **Outbound link (Stage 11):** a "Go to {retailer}" button to `/go/[code]` — never the
+  retailer URL itself (§10). Without an active link the page says the link isn't available.
 - Server-rendered with no client JavaScript on public pages; two-column cards on phones.
 
 ## 6. Retailer adapter architecture
@@ -1102,6 +1102,9 @@ tables follow its core schema (migration `…_better_auth`).
 
 ## 10. Affiliate tracking architecture
 
+**Implemented in Stage 11** (`src/server/affiliate/` pure helpers, `src/server/services/affiliate/`,
+`src/app/go/[code]/route.ts`, `src/app/robots.ts`, `src/app/admin/clicks/`).
+
 ```
 DealCard / Deal page ──► <OutboundLink code="k3f9a2">  (renders href="/go/k3f9a2", rel="sponsored nofollow")
                                   │
@@ -1119,6 +1122,32 @@ DealCard / Deal page ──► <OutboundLink code="k3f9a2">  (renders href="/go/
 - **Single source of truth:** `AffiliateLink` rows are created by the ingestion
   service using `adapter.buildAffiliateUrl()`. UI components never see retailer or
   affiliate URLs — only link codes.
+- **One link per product.** Each catalogue import calls `syncProductLink` in the same
+  transaction as the product upsert: it builds the URL with the retailer's adapter, rejects
+  anything not https on the adapter's `allowedHosts`, then creates the link or updates its
+  destination. The **code never changes**, so links already on pages keep working. Codes
+  are 10 random base-62 characters. The database enforces https, the code format and at
+  most one product-level link per product (partial unique index). Products imported before
+  Stage 11 get their link on the retailer's next catalogue import.
+- **Deal attribution:** the deal page links to `/go/<code>?p=deal-page&deal=<slug>`. The click
+  records that deal only if the slug belongs to the link's product, and `p` only if it is a
+  known placement (`src/lib/outbound.ts`). Otherwise both are stored as null.
+- **Redirect checks, in order:** per-IP rate limit (60/minute; over the limit returns 429
+  without touching the database), code format, link active, product active, retailer
+  `ACTIVE`, destination still on the adapter's allowed hosts. Any failure is a 404 with no
+  `Location`. Responses are `Cache-Control: no-store` and `X-Robots-Tag: noindex, nofollow`.
+  `HEAD` gets the same answer but records nothing (link checkers and unfurlers).
+- **Recording** happens in `after()`, i.e. once the redirect has been sent, and errors are
+  logged and swallowed. The button is a plain `<a>`, not `next/link`, so prefetching can
+  never count as a click.
+- **Rate limiter is per instance** (in memory). On serverless each instance counts on its
+  own, so the effective limit is looser. A shared store is Stage 15 hardening work. If a
+  request carries no client IP header, all such requests share one bucket.
+- **What a click stores:** `ipHash` is an HMAC-SHA256 of the IP keyed with the UTC day and
+  `BETTER_AUTH_SECRET` (domain-separated), so it rotates daily and can't be reversed or
+  linked across days. The user agent is capped at 512 characters, and the referrer is cut
+  to origin + path (query strings can carry personal data). `isBot` comes from user-agent
+  heuristics, including no user agent. `userId` is not recorded yet.
 - Unknown/inactive code → 404 (no redirect), so the endpoint can't be abused as an
   open redirect.
 - Click recording must never block or break the redirect: failures are logged and
@@ -1126,7 +1155,8 @@ DealCard / Deal page ──► <OutboundLink code="k3f9a2">  (renders href="/go/
 - `/go/*` is disallowed in `robots.txt`; links are `rel="sponsored nofollow noopener"`.
 - Every page with outbound links shows a clear affiliate disclosure (ASA/CAP, CMA).
 - Privacy: no raw IPs; salted hash with rotating salt; bot clicks flagged and
-  excluded from reporting; cookie consent before any non-essential tracking.
+  excluded from reporting; `/go` sets no cookies. Cookie consent is needed before any
+  non-essential tracking is added.
 
 ---
 

@@ -1,10 +1,14 @@
 // Creates one clearly-labelled test product with a price drop and runs real deal detection,
-// so E2E tests always have a PENDING_REVIEW deal. Prints its IDs and slugs as JSON.
+// so E2E tests always have a PENDING_REVIEW deal. The retailer uses the mock adapter, which
+// builds the product's outbound link exactly as ingestion would. Prints IDs and slugs as JSON.
 import "dotenv/config";
 import { randomUUID } from "node:crypto";
 import { db } from "@/server/db/client";
 import { createPriceHistoryRepository } from "@/server/db/repositories/price-history.repository";
 import { createProductRepository } from "@/server/db/repositories/product.repository";
+import { createAdapter } from "@/server/retailers";
+import { MOCK_HOST } from "@/server/retailers/adapters/mock/catalogue";
+import { createAffiliateLinkService } from "@/server/services/affiliate/affiliate-links.service";
 import { createDealDetectionService } from "@/server/services/deals/deal-detection.service";
 
 const DAY = 86_400_000;
@@ -16,9 +20,10 @@ async function main() {
     data: {
       slug: `e2e-retailer-${id}`,
       name: `E2E Retailer ${id}`,
-      websiteUrl: "https://e2e.invalid",
-      adapterKey: "e2e-fixture",
-      integrationType: "MANUAL",
+      websiteUrl: `https://${MOCK_HOST}`,
+      adapterKey: "mock",
+      adapterConfig: { productCount: 1 },
+      integrationType: "MOCK",
     },
   });
   const category = await db.category.create({
@@ -29,7 +34,7 @@ async function main() {
     retailerId: retailer.id,
     externalId: `E2E-${id}`,
     title,
-    productUrl: `https://e2e.invalid/p/${id}`,
+    productUrl: `https://${MOCK_HOST}/p/e2e-${id}`,
     categoryId: category.id,
     currency: "GBP",
     availability: "IN_STOCK",
@@ -43,6 +48,12 @@ async function main() {
         availability: "IN_STOCK",
       },
     ],
+  });
+  const { code: linkCode } = await createAffiliateLinkService(db).syncProductLink({
+    retailerId: retailer.id,
+    productId: product.id,
+    productUrl: product.productUrl,
+    adapter: createAdapter(retailer, { now: () => now, env: process.env }),
   });
   const variantId = product.variants[0]!.id;
   const history = createPriceHistoryRepository(db);
@@ -74,6 +85,7 @@ async function main() {
       slug: deal.slug,
       retailerSlug: retailer.slug,
       categorySlug: category.slug,
+      linkCode,
     }),
   );
 }

@@ -8,6 +8,7 @@ import {
   type PublicDealSummary,
   type PublicRetailer,
 } from "@/lib/public-types";
+import { createAffiliateRepository } from "@/server/db/repositories/affiliate.repository";
 import { createPriceHistoryRepository } from "@/server/db/repositories/price-history.repository";
 import {
   createPublicRepository,
@@ -108,18 +109,19 @@ export function createPublicCatalogueService(client: DbClient) {
     async dealBySlug(slug: string, now: Date): Promise<PublicDealDetail | null> {
       const row = await repo.findDealBySlug(slug);
       if (!row) return null;
-      const observations = await createPriceHistoryRepository(client).listForVariant(
-        row.variantId,
-        {
+      const [observations, linkCodes] = await Promise.all([
+        createPriceHistoryRepository(client).listForVariant(row.variantId, {
           since: new Date(now.getTime() - CHART_DAYS * DAY_MS),
-        },
-      );
+        }),
+        createAffiliateRepository(client).activeProductLinkCodes([row.productId]),
+      ]);
       const stats = computePriceStats(observations, now);
       const purchasable = observations.filter(
         (o) => o.availability !== "OUT_OF_STOCK" && o.availability !== "DISCONTINUED",
       );
       return {
         ...toSummary(row),
+        linkCode: linkCodes.get(row.productId) ?? null,
         summary: row.summary,
         description: row.description,
         expiresAt: row.expiresAt,

@@ -14,6 +14,7 @@ import {
   type NormalisedProduct,
   type RetailerAdapter,
 } from "@/server/retailers";
+import { createAffiliateLinkService } from "@/server/services/affiliate/affiliate-links.service";
 import { DEFAULT_HEARTBEAT_MS, shouldRecordObservation } from "./observation-policy";
 import { toPriceSnapshot } from "./price-snapshot";
 
@@ -207,6 +208,13 @@ export function createIngestionService(client: DbClient, options: { heartbeatMs?
                     currentPrice: v.price,
                     availability: v.availability,
                   })),
+                });
+                // Outbound links are only ever built here, by the retailer's own adapter.
+                await createAffiliateLinkService(tx).syncProductLink({
+                  retailerId,
+                  productId: product.id,
+                  productUrl: item.productUrl,
+                  adapter,
                 });
                 const idByExternal = new Map(product.variants.map((v) => [v.externalId, v.id]));
                 await recordPrices(
