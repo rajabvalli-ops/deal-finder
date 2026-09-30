@@ -1,8 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 import { createDealFixture, signInAs, type DealFixture } from "./helpers";
 
-// The mock retailer's host (.invalid) never resolves, so the browser is answered locally
-// once the redirect reaches it.
+// The mock retailer's host (.invalid) never resolves, so tests check the redirect itself
+// rather than the page the browser would land on.
 const MOCK_RETAILER = /^https:\/\/mock-retailer\.invalid\//;
 const BROWSER_UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36";
@@ -22,9 +22,6 @@ test("the deal page links out through /go and the click is recorded", async ({ p
 
   // A regular browser user agent: headless ones are (rightly) flagged as bots.
   const visitor = await (await browser.newContext({ userAgent: BROWSER_UA })).newPage();
-  await visitor.route(MOCK_RETAILER, (route) =>
-    route.fulfill({ contentType: "text/html", body: "<h1>Mock retailer</h1>" }),
-  );
   await visitor.goto(`/deals/${fixture.slug}`);
 
   const button = visitor.getByRole("link", { name: /^Go to E2E Retailer/ });
@@ -36,9 +33,15 @@ test("the deal page links out through /go and the click is recorded", async ({ p
   // The retailer URL itself never appears in the page.
   expect(await visitor.content()).not.toContain("mock-retailer.invalid");
 
-  await button.click();
-  await expect(visitor).toHaveURL(/^https:\/\/mock-retailer\.invalid\/p\/e2e-.*ref=mock-affiliate/);
-  await expect(visitor.getByRole("heading", { name: "Mock retailer" })).toBeVisible();
+  const [redirect] = await Promise.all([
+    visitor.waitForResponse((r) => new URL(r.url()).pathname === `/go/${fixture.linkCode}`),
+    // The navigation itself fails (the host doesn't exist); only the redirect matters.
+    button.click().catch(() => undefined),
+  ]);
+  expect(redirect.status()).toBe(302);
+  expect(redirect.headers()["location"]).toMatch(
+    /^https:\/\/mock-retailer\.invalid\/p\/e2e-.*ref=mock-affiliate/,
+  );
 
   // Recorded after the redirect is sent, so allow a moment for it to land.
   await expect(async () => {
