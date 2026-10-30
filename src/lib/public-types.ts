@@ -50,6 +50,12 @@ export type PublicDealDetail = PublicDealSummary & {
 };
 
 export type PublicCategory = { slug: string; name: string; dealCount: number };
+
+/** Filter choices on the search page. `depth` is 0 for top-level categories. */
+export type SearchOptions = {
+  categories: { slug: string; name: string; depth: number }[];
+  retailers: { slug: string; name: string }[];
+};
 export type PublicRetailer = { slug: string; name: string; dealCount: number };
 
 export const DEAL_SORTS = ["newest", "discount", "saving", "top"] as const;

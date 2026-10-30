@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 const shells = [
   { path: "/", heading: "Genuine price drops from UK retailers" },
   { path: "/deals", heading: "Latest deals" },
-  { path: "/search", heading: "Search" },
+  { path: "/search", heading: "Search deals" },
   { path: "/alerts", heading: "Price alerts" },
 ];
 

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { DealGrid } from "@/components/public/deal-card";
+import { SearchBox } from "@/components/public/search-form";
 import { site } from "@/lib/site";
 import { publicCatalogue } from "@/server/services/public";
 
@@ -45,6 +46,9 @@ export default async function HomePage() {
           recent history — not a made-up &ldquo;was&rdquo; price. Every deal is checked by a person
           before it appears here.
         </p>
+        <div className="pt-2">
+          <SearchBox />
+        </div>
       </section>
 
       {empty ? (

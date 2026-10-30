@@ -193,7 +193,7 @@ Key principles:
 >   discount 0–10 000 bps, score 0–100, alert needs a keyword/product/category, category
 >   not its own parent), plus partial unique indexes for **one default variant per
 >   product** and **one active deal per variant**.
-> - Full-text search indexes are deferred to the search stage.
+> - Full-text search indexes were added in Stage 12 (see §5, Search).
 
 ```prisma
 generator client {
@@ -641,8 +641,9 @@ Notes:
 - `Product.affiliateUrl` from the spec is deliberately **not** a column on Product:
   it is represented by `AffiliateLink` (see §10), so there is one central place for
   outbound URLs.
-- Full-text search: a generated `tsvector` column + GIN index and `pg_trgm` index on
-  `Product.title`/`brand`/`model` added via raw SQL migration.
+- Full-text search (Stage 12): an immutable SQL function `product_search_document(title,
+brand, model, description)` with a GIN expression index, plus a `pg_trgm` GIN index on
+  `lower(title)`, added via raw SQL migration. No extra column, so Prisma's schema is unchanged.
 - `PriceHistory` is the only high-volume table. Writing on change + daily heartbeat
   keeps it modest; monthly range partitioning can be added later without app changes.
 
@@ -808,6 +809,7 @@ HTTP status in one helper; no Prisma types leak to the UI (services return DTOs)
 | `/deals/[slug]`      | ISR (rendered on first visit, 5 min) | Price, named comparison, price-checked time, 180-day chart, 7/30/90-day averages, low/high, product info, related deals, disclosure |
 | `/categories/[slug]` | Dynamic                              | Deals in the category and its subcategories, subcategory links                                                                      |
 | `/retailers/[slug]`  | Dynamic                              | The retailer's deals (disabled retailers 404)                                                                                       |
+| `/search`            | Dynamic (GET form, no JavaScript)    | Keyword search and filters over live deals — Stage 12, see below                                                                    |
 
 - **What is public:** only `PUBLISHED` deals whose product is active and whose retailer is
   `ACTIVE`; anything else 404s. `src/server/services/public/` maps rows to plain types in
@@ -902,6 +904,29 @@ Nothing else changes: ingestion, pricing, deals, admin, public pages, affiliate 
 alerts all operate on normalised data keyed by `retailerId`. A further merchant on an
 already-supported affiliate network needs **no new code** — only another `Retailer` row with a
 different `adapterConfig`.
+
+### Search (implemented in Stage 12)
+
+`src/lib/validation/search.ts` (parsing), `src/server/db/repositories/search.repository.ts`
+(SQL), `src/server/services/public/search.service.ts`, `src/app/(public)/search/page.tsx`.
+
+- **What is searched:** live deals only (the same visibility rule as the rest of the public
+  site). Products without a deal have no public page, so they are not search results.
+- **Matching:** each word of a plain query must match the product's text (title A, brand and
+  model B, description C; English stemming) **or** be a close typo of a word in the title
+  (`pg_trgm` word similarity ≥ 0.5). Stop words are skipped, but a query of only stop words
+  or punctuation matches nothing. Queries using operators — `"exact phrase"`, `-exclude`,
+  `OR` — use `websearch_to_tsquery` with no typo matching, so the operators mean what they say.
+  All values are bound parameters; there is no string-built SQL.
+- **Filters:** category (including subcategories), retailer, price range (pounds → pence),
+  minimum discount (10/20/30/50%), in stock (IN_STOCK or LOW_STOCK). Unknown or invalid values
+  are dropped rather than rejected, so shared links always render.
+- **Sorting:** best match (full-text rank + title similarity, then score), newest, biggest
+  discount, biggest saving, price low→high and high→low. Paged 24 at a time.
+- **SEO:** result pages (any keyword or filter) are `noindex, follow`; the bare page is indexable.
+- **Scale note:** the query starts from published deals, which stay few relative to the
+  catalogue. The indexes are ready for product-level search later; a JSON `/api/search` for a
+  client-side filter UI is not needed yet and was not built.
 
 ---
 

@@ -7,13 +7,14 @@ UK deal discovery and price-intelligence platform (working name).
 
 ## Status
 
-Stage 11 (affiliate links and click tracking). Built so far: schema and migrations,
-repositories, the deterministic pricing and deal engines, the deal workflow, the retailer
-adapter framework with `MockRetailerAdapter`, ingestion, deal detection/expiry and scheduled
-jobs, email + password sign-in with roles, the admin dashboard, the public site (home,
-deals, deal pages with price history, categories, retailers), and outbound links through
-`/go/[code]` with click recording. Search and alerts come next. There is no real retailer
-yet: mock links point at the fictional `mock-retailer.invalid`, which does not resolve.
+Stage 12 (search). Built so far: schema and migrations, repositories, the deterministic
+pricing and deal engines, the deal workflow, the retailer adapter framework with
+`MockRetailerAdapter`, ingestion, deal detection/expiry and scheduled jobs, email + password
+sign-in with roles, the admin dashboard, the public site (home, deals, deal pages with price
+history, categories, retailers), outbound links through `/go/[code]` with click recording,
+and search (`/search`: typo-tolerant keyword search with category, retailer, price, discount
+and stock filters). Alerts come next. There is no real retailer yet: mock links point at the
+fictional `mock-retailer.invalid`, which does not resolve.
 
 ## Requirements
 

@@ -20,7 +20,7 @@ import { computePriceStats } from "@/server/pricing";
 const DAY_MS = 86_400_000;
 const CHART_DAYS = 180;
 
-function toSummary(row: PublicDealRow): PublicDealSummary {
+export function toSummary(row: PublicDealRow): PublicDealSummary {
   const category = row.product.category;
   return {
     slug: row.slug,
