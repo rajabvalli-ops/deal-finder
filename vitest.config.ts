@@ -33,6 +33,7 @@ export default defineConfig({
         "src/server/affiliate/**",
         "src/server/auth/roles.ts",
         "src/server/rate-limit/**",
+        "src/server/push/**",
         "src/server/jobs/cron-auth.ts",
         "src/server/pricing/**",
         "src/server/deals/engine/**",

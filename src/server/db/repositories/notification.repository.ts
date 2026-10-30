@@ -36,7 +36,7 @@ export function createNotificationRepository(client: DbClient) {
       return client.notification.createManyAndReturn({
         data,
         skipDuplicates: true,
-        select: { id: true, alertId: true },
+        select: { id: true, alertId: true, dealId: true, userId: true, subject: true, body: true },
       });
     },
 

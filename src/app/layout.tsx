@@ -1,8 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
+import { AccountLinks } from "@/components/public/account-links";
 import { AffiliateDisclosure } from "@/components/public/affiliate-disclosure";
 import { site, primaryNav } from "@/lib/site";
 import { env } from "@/server/env";
+import { signOutAction } from "./(auth)/actions";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -32,7 +34,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               {site.name}
             </Link>
             <nav aria-label="Main">
-              <ul className="flex gap-4 text-sm font-medium">
+              <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm font-medium">
                 {primaryNav.map((item) => (
                   <li key={item.href}>
                     <Link href={item.href} className="hover:text-brand-600">
@@ -40,11 +42,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     </Link>
                   </li>
                 ))}
-                <li>
-                  <Link href="/sign-in" className="hover:text-brand-600">
-                    Sign in
-                  </Link>
-                </li>
+                <AccountLinks signOut={signOutAction} />
               </ul>
             </nav>
           </div>

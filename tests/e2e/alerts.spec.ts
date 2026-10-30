@@ -94,3 +94,35 @@ test("a search can be turned into an alert", async ({ page }) => {
   await expect(page.getByLabel("Keyword")).toHaveValue("kettle");
   await expect(page.getByLabel("Discount")).toHaveValue("20");
 });
+
+test("one click sets up a price-error alert", async ({ page }) => {
+  await signInAs(page, "USER");
+  await page.goto("/alerts");
+  await page.getByRole("button", { name: "Alert me about price errors" }).click();
+  await expect(page.getByRole("status")).toHaveText(/Alert created/);
+  await expect(page.getByText("Everything", { exact: true })).toBeVisible();
+  await expect(page.getByText("Possible price errors only")).toBeVisible();
+});
+
+test("the header shows who is signed in", async ({ page }) => {
+  await page.goto("/deals");
+  const header = page.getByRole("navigation", { name: "Main" });
+  await expect(header.getByRole("link", { name: "Sign in" })).toHaveAttribute(
+    "href",
+    "/sign-in?next=%2Fdeals",
+  );
+  await signInAs(page, "EDITOR");
+  await page.goto("/deals");
+  await expect(header.getByRole("button", { name: "Sign out" })).toBeVisible();
+  await expect(header.getByRole("link", { name: "Admin" })).toBeVisible();
+  await header.getByRole("button", { name: "Sign out" }).click();
+  await expect(header.getByRole("link", { name: "Sign in" })).toBeVisible();
+});
+
+test("the price drops page lists big drops", async ({ page }) => {
+  await page.goto("/price-drops");
+  await expect(page.getByRole("heading", { level: 1, name: "Big price drops" })).toBeVisible();
+  await expect(
+    page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Price drops" }),
+  ).toBeVisible();
+});

@@ -30,7 +30,7 @@ describe("allowedActions", () => {
   };
   const system: Record<DealStatus, DealAction[]> = {
     DETECTED: ["submit", "expire"],
-    PENDING_REVIEW: ["expire"],
+    PENDING_REVIEW: ["auto-publish", "expire"],
     APPROVED: ["expire"],
     PUBLISHED: ["expire"],
     REJECTED: [],
@@ -58,6 +58,16 @@ describe("transition", () => {
     ["EXPIRED", "remove", "REMOVED", null],
   ] as const)("%s —%s→ %s (sets %s)", (from, action, to, sets) => {
     expect(transition(from, action, "editor")).toEqual({ ok: true, from, to, sets });
+  });
+
+  it("lets only the system auto-publish a deal awaiting review", () => {
+    expect(transition("PENDING_REVIEW", "auto-publish", "system")).toEqual({
+      ok: true,
+      from: "PENDING_REVIEW",
+      to: "PUBLISHED",
+      sets: "publishedAt",
+    });
+    expect(transition("PENDING_REVIEW", "auto-publish", "editor").ok).toBe(false);
   });
 
   it("refuses transitions from the wrong status", () => {

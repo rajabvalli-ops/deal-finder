@@ -91,6 +91,7 @@ export default async function AdminDealPage({
           ],
           ["Saving", `${formatPrice(deal.savingAmount)} (${formatBps(deal.discountBps)})`],
           ["Score", `${deal.score} / 100`],
+          ["Level", humanise(deal.level)],
         ].map(([label, value]) => (
           <div key={label} className="rounded-lg border border-line p-3">
             <span className="block text-sm text-ink-muted">{label}</span>

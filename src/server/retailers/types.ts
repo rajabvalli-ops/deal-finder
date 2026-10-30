@@ -4,6 +4,10 @@ import type { NormalisedPriceUpdate, NormalisedProduct } from "./schemas";
 export type AdapterContext = {
   now: () => Date;
   env: Readonly<Record<string, string | undefined>>;
+  /** HTTP client for adapters that call a network API; tests pass a fake. Defaults to `fetch`. */
+  fetch?: typeof fetch;
+  /** Waits between rate-limited calls; tests pass a no-op. Defaults to a real timer. */
+  sleep?: (ms: number) => Promise<void>;
 };
 
 export type CataloguePage = { items: NormalisedProduct[]; nextCursor: string | null };

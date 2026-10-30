@@ -50,9 +50,14 @@ export const alertFormSchema = z
       .refine((v) => v === "" || (DISCOUNT_OPTIONS as readonly number[]).includes(Number(v)))
       .transform((v) => (v === "" ? null : Number(v) * 100))
       .prefault(""),
+    /** Only big drops (35%+) or possible price errors (70%+). */
+    level: z
+      .enum(["", "big-drop", "price-error"])
+      .transform((v) => (v === "" ? null : v === "big-drop" ? "BIG_DROP" : "PRICE_ERROR"))
+      .prefault(""),
   })
-  .refine((a) => a.keyword !== null || a.category !== null || a.deal !== null, {
-    message: "Choose a keyword, a category or a product to watch",
+  .refine((a) => a.keyword !== null || a.category !== null || a.deal !== null || a.level !== null, {
+    message: "Choose a keyword, a category, a product or a kind of drop to watch",
   })
   .transform((a) => ({
     keyword: a.keyword,
@@ -61,6 +66,7 @@ export const alertFormSchema = z
     dealSlug: a.deal,
     maxPrice: a.max,
     minDiscountBps: a.discount,
+    minLevel: a.level as "BIG_DROP" | "PRICE_ERROR" | null,
   }));
 
 export type AlertInput = z.output<typeof alertFormSchema>;

@@ -1,6 +1,6 @@
 import { formatBps, formatPrice, ratioToBps } from "@/lib/money";
 import { compareToReference } from "@/server/pricing";
-import { DEFAULT_DEAL_ENGINE_CONFIG, thresholdsFor } from "./config";
+import { dealLevel, DEFAULT_DEAL_ENGINE_CONFIG, thresholdsFor } from "./config";
 import { computeScore, isPreviousPriceInflated, NEAR_LOW_BPS } from "./score";
 import type {
   DealCandidate,
@@ -14,7 +14,7 @@ import type {
 // Deterministic deal detection. Pure: no database, clock, randomness or AI — `now` is an input.
 // Changing any rule, threshold default or weight must bump DEAL_ENGINE_VERSION.
 
-export const DEAL_ENGINE_VERSION = "deal-engine@1";
+export const DEAL_ENGINE_VERSION = "deal-engine@2";
 
 const REFERENCE_LABELS: Record<ReferenceType, string> = {
   PREVIOUS: "previous price",
@@ -153,6 +153,15 @@ export function evaluateDeal(
   }
 
   const scoreBreakdown = computeScore(input, current, discountBps, saving);
+  const level = dealLevel(discountBps, config);
+  const reasons = buildReasons(input, current, reference, discountBps, saving);
+  if (level === "PRICE_ERROR") {
+    reasons.unshift(
+      `Possible price error: ${formatBps(discountBps)} off is unusually deep — retailers often correct or cancel these`,
+    );
+  } else if (level === "BIG_DROP") {
+    reasons.unshift(`Big price drop: ${formatBps(discountBps)} off`);
+  }
   const candidate: DealCandidate = {
     dealPrice: current,
     referencePrice: reference.price,
@@ -164,7 +173,8 @@ export function evaluateDeal(
     avg90Price: input.stats.avg90,
     score: scoreBreakdown.total,
     scoreBreakdown,
-    reasons: buildReasons(input, current, reference, discountBps, saving),
+    level,
+    reasons,
     engineVersion: DEAL_ENGINE_VERSION,
   };
 

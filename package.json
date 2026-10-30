@@ -27,7 +27,8 @@
     "test:coverage": "vitest run --coverage",
     "import": "tsx --conditions=react-server scripts/import.ts",
     "job": "tsx --conditions=react-server scripts/job.ts",
-    "user:role": "tsx --conditions=react-server scripts/set-role.ts"
+    "user:role": "tsx --conditions=react-server scripts/set-role.ts",
+    "push:keys": "tsx scripts/push-keys.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.0",
@@ -38,6 +39,7 @@
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "server-only": "0.0.1",
+    "web-push": "^3.6.7",
     "zod": "4.6.5"
   },
   "devDependencies": {
@@ -47,6 +49,7 @@
     "@types/pg": "8.23.1",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
+    "@types/web-push": "^3.6.4",
     "@vitest/coverage-v8": "5.0.2",
     "dotenv": "18.0.4",
     "eslint": "9.39.5",

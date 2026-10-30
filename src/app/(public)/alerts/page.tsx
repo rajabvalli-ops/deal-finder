@@ -12,9 +12,21 @@ import {
   type SearchFilters,
 } from "@/lib/validation/search";
 import { getCurrentUser } from "@/server/auth";
-import { ALERT_ERROR_MESSAGES, alerts, type AlertErrorCode } from "@/server/services/alerts";
+import { PushToggle } from "@/components/public/push-toggle";
+import {
+  ALERT_ERROR_MESSAGES,
+  alerts,
+  pushPublicKey,
+  type AlertErrorCode,
+} from "@/server/services/alerts";
 import { publicSearch } from "@/server/services/public";
-import { alertAction, createAlert, notificationAction } from "./actions";
+import {
+  alertAction,
+  createAlert,
+  notificationAction,
+  removePushSubscription,
+  savePushSubscription,
+} from "./actions";
 
 export const metadata: Metadata = {
   title: "Price alerts",
@@ -66,6 +78,14 @@ function PriceFields({
   return (
     <>
       <label className={label}>
+        Deal type
+        <select name="level" defaultValue="" className={field}>
+          <option value="">Any matching deal</option>
+          <option value="big-drop">Big drops (35%+ off)</option>
+          <option value="price-error">Possible price errors (70%+ off)</option>
+        </select>
+      </label>
+      <label className={label}>
         Max price (£)
         <input
           name="max"
@@ -114,7 +134,7 @@ async function CreateAlertForm({
           Watching <strong>{deal.productTitle}</strong>, now {formatPrice(deal.dealPrice)}.
           We&apos;ll tell you about its next deal that matches your price.
         </p>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-3">
           <PriceFields maxPrice={deal.dealPrice} minDiscount={null} />
         </div>
         <button type="submit" className={primaryButton}>
@@ -129,10 +149,10 @@ async function CreateAlertForm({
     <form action={createAlert} className="space-y-4 rounded-lg border border-line p-4">
       <input type="hidden" name="returnTo" value={returnTo} />
       <p className="text-sm text-ink-muted">
-        Choose a keyword, a category or both, then narrow it down if you like.
+        Choose a keyword, a category or a deal type (or several), then narrow it down if you like.
       </p>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <label className={`${label} sm:col-span-2 lg:col-span-1`}>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <label className={label}>
           Keyword
           <input
             name="keyword"
@@ -224,6 +244,7 @@ export default async function AlertsPage({ searchParams }: Props) {
     alerts.list(user.id),
     alerts.notifications(user.id),
   ]);
+  const publicKey = pushPublicKey();
 
   return (
     <div className="space-y-8">
@@ -244,6 +265,15 @@ export default async function AlertsPage({ searchParams }: Props) {
             </form>
           ) : null}
         </div>
+        {publicKey ? (
+          <div className="rounded-lg border border-line p-3">
+            <PushToggle
+              publicKey={publicKey}
+              save={savePushSubscription}
+              remove={removePushSubscription}
+            />
+          </div>
+        ) : null}
         {notifications.items.length === 0 ? (
           <p className="text-ink-muted">
             No notifications yet. When a new deal matches one of your alerts, it appears here.
@@ -298,11 +328,26 @@ export default async function AlertsPage({ searchParams }: Props) {
         {alertList.length >= MAX_ALERTS_PER_USER ? (
           <p className="text-ink-muted">{ALERT_ERROR_MESSAGES.LIMIT_REACHED}</p>
         ) : (
-          <CreateAlertForm
-            prefill={parseSearchParams(raw)}
-            dealSlug={dealSlug}
-            returnTo={returnTo}
-          />
+          <>
+            <form
+              action={createAlert}
+              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-brand-50 p-4"
+            >
+              <input type="hidden" name="level" value="price-error" />
+              <p className="text-sm">
+                <strong>Price-error hunter:</strong> get pinged about every possible price error
+                (70%+ off), whatever it is.
+              </p>
+              <button type="submit" className={primaryButton}>
+                Alert me about price errors
+              </button>
+            </form>
+            <CreateAlertForm
+              prefill={parseSearchParams(raw)}
+              dealSlug={dealSlug}
+              returnTo={returnTo}
+            />
+          </>
         )}
       </section>
 

@@ -3,7 +3,8 @@ import { db } from "@/server/db/client";
 import { createAdminRepository } from "@/server/db/repositories/admin.repository";
 import { createPriceHistoryRepository } from "@/server/db/repositories/price-history.repository";
 import { computePriceStats } from "@/server/pricing";
-import { createAdminCatalogueService } from "./admin-catalogue.service";
+import { AMAZON_ENV } from "@/server/retailers/adapters/amazon";
+import { amazonConfigOf, createAdminCatalogueService } from "./admin-catalogue.service";
 import { createAdminDealsService } from "./admin-deals.service";
 import { createAdminUsersService } from "./admin-users.service";
 
@@ -41,4 +42,13 @@ export async function getProductDetail(id: string, now: Date) {
   const defaultVariant = product.variants.find((v) => v.isDefault) ?? product.variants[0];
   const history = defaultVariant ? await variantHistory(defaultVariant.id, now) : null;
   return { product, defaultVariant, history };
+}
+
+/** An Amazon retailer's tracking settings and which credentials are missing (names only). */
+export async function getAmazonTracking(retailerId: string) {
+  const retailer = await adminReads.findRetailer(retailerId);
+  const config = retailer ? amazonConfigOf(retailer) : null;
+  if (!retailer || !config) return null;
+  const missingEnv = Object.values(AMAZON_ENV).filter((key) => !process.env[key]?.trim());
+  return { retailer, config, missingEnv };
 }

@@ -52,6 +52,13 @@ enum ReferencePriceType {
   AVG_90
 }
 
+/// How striking a deal is, from the deal engine's discount bands (ordered: compare with >=).
+enum DealLevel {
+  NORMAL
+  BIG_DROP
+  PRICE_ERROR
+}
+
 enum RetailerStatus {
   ACTIVE
   PAUSED
@@ -110,13 +117,14 @@ model User {
   createdAt     DateTime @default(now()) @db.Timestamptz(3)
   updatedAt     DateTime @updatedAt @db.Timestamptz(3)
 
-  accounts      Account[]
-  sessions      Session[]
-  alerts        Alert[]
-  notifications Notification[]
-  clicks        Click[]
-  reviewedDeals Deal[]         @relation("DealReviewer")
-  auditLogs     AuditLog[]
+  accounts          Account[]
+  sessions          Session[]
+  alerts            Alert[]
+  notifications     Notification[]
+  pushSubscriptions PushSubscription[]
+  clicks            Click[]
+  reviewedDeals     Deal[]             @relation("DealReviewer")
+  auditLogs         AuditLog[]
 }
 
 model Session {
@@ -194,6 +202,8 @@ model Retailer {
   adapterConfig   Json?
   /// 0–100, set by admins; an input to the deal engine.
   trustScore      Int             @default(50)
+  /// Publish engine-detected deals straight away instead of waiting for an editor.
+  autoPublish     Boolean         @default(false)
   deliveryInfo    String?
   createdAt       DateTime        @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime        @updatedAt @db.Timestamptz(3)
@@ -358,6 +368,9 @@ model Deal {
   scoreBreakdown Json
   /// e.g. "deal-engine@1"
   engineVersion  String
+  level          DealLevel          @default(NORMAL)
+  /// When the level last went up on an existing deal (alerts fire again for the higher level).
+  levelRaisedAt  DateTime?          @db.Timestamptz(3)
 
   detectedAt      DateTime  @default(now()) @db.Timestamptz(3)
   reviewedAt      DateTime? @db.Timestamptz(3)
@@ -380,6 +393,7 @@ model Deal {
   notifications  Notification[]
 
   @@index([status, publishedAt])
+  @@index([status, level, publishedAt])
   @@index([retailerId, status])
   @@index([productId, status])
   @@index([variantId])
@@ -501,9 +515,9 @@ model Click {
 
 // ───────────── Alerts & notifications ─────────────
 
-/// A user's price alert. At least one of keyword/productId/categoryId is required (CHECK constraint).
+/// A user's price alert. At least one of keyword/productId/categoryId/minLevel is required (CHECK constraint).
 model Alert {
-  id              String    @id @default(cuid())
+  id              String     @id @default(cuid())
   userId          String
   keyword         String?
   productId       String?
@@ -511,10 +525,12 @@ model Alert {
   retailerId      String?
   maxPrice        Int?
   minDiscountBps  Int?
-  isActive        Boolean   @default(true)
-  lastTriggeredAt DateTime? @db.Timestamptz(3)
-  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt       DateTime  @updatedAt @db.Timestamptz(3)
+  /// Only deals at this level or above (big drops, possible price errors).
+  minLevel        DealLevel?
+  isActive        Boolean    @default(true)
+  lastTriggeredAt DateTime?  @db.Timestamptz(3)
+  createdAt       DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime   @updatedAt @db.Timestamptz(3)
 
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   product       Product?       @relation(fields: [productId], references: [id], onDelete: Cascade)
@@ -536,7 +552,7 @@ model Notification {
   status    NotificationStatus  @default(PENDING)
   subject   String
   body      String              @db.Text
-  /// Prevents duplicate notifications, e.g. "<alertId>:<dealId>".
+  /// Prevents duplicate notifications, e.g. "<alertId>:<dealId>:<level>".
   dedupeKey String              @unique
   attempts  Int                 @default(0)
   lastError String?
@@ -550,6 +566,25 @@ model Notification {
 
   @@index([status, createdAt])
   @@index([userId, createdAt])
+}
+
+/// A browser that agreed to receive push notifications (Web Push). Keys are the browser's
+/// public encryption keys, not secrets of ours.
+model PushSubscription {
+  id            String    @id @default(cuid())
+  userId        String
+  /// The push service URL the browser gave us. Unique per browser profile.
+  endpoint      String    @unique
+  p256dh        String
+  auth          String
+  userAgent     String?
+  lastSuccessAt DateTime? @db.Timestamptz(3)
+  failureCount  Int       @default(0)
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 // ───────────── Operations ─────────────

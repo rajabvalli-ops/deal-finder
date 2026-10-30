@@ -3,10 +3,11 @@ import { testDb } from "./setup";
 
 let sequence = 0;
 
-export async function createRetailer(overrides: { slug?: string } = {}) {
+export async function createRetailer(overrides: { slug?: string; autoPublish?: boolean } = {}) {
   sequence += 1;
   return testDb.retailer.create({
     data: {
+      autoPublish: overrides.autoPublish ?? false,
       slug: overrides.slug ?? `test-retailer-${sequence}`,
       name: `Test Retailer ${sequence}`,
       websiteUrl: "https://retailer.invalid",
@@ -46,7 +47,7 @@ export function listingInput(
 /** A product with 30 days at £100 then £80 now, run through deal detection → one PENDING_REVIEW deal. */
 export async function createPendingDeal(
   now = new Date(),
-  overrides: { title?: string; externalId?: string } = {},
+  overrides: { title?: string; externalId?: string; dropTo?: number; autoPublish?: boolean } = {},
 ) {
   const { createProductRepository } = await import("@/server/db/repositories/product.repository");
   const { createPriceHistoryRepository } =
@@ -54,7 +55,8 @@ export async function createPendingDeal(
   const { createDealDetectionService } =
     await import("@/server/services/deals/deal-detection.service");
   const DAY = 86_400_000;
-  const retailer = await createRetailer();
+  const retailer = await createRetailer({ autoPublish: overrides.autoPublish });
+  const dropTo = overrides.dropTo ?? 8000;
   const externalId = overrides.externalId ?? "SKU-1";
   const product = await createProductRepository(testDb).upsertListing(
     listingInput(retailer.id, {
@@ -65,7 +67,7 @@ export async function createPendingDeal(
           externalId,
           name: "Default",
           isDefault: true,
-          currentPrice: 8000,
+          currentPrice: dropTo,
           availability: "IN_STOCK",
         },
       ],
@@ -85,7 +87,7 @@ export async function createPendingDeal(
   const at = new Date(now.getTime() - 3_600_000);
   await history.record({
     variantId: variant.id,
-    price: 8000,
+    price: dropTo,
     currency: "GBP",
     availability: "IN_STOCK",
     observedAt: at,

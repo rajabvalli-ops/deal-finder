@@ -6,7 +6,9 @@ import {
   alertFormSchema,
   notificationActionSchema,
 } from "@/lib/validation/alerts";
-import { requireRole } from "@/server/auth";
+import { headers } from "next/headers";
+import { pushEndpointSchema, pushSubscriptionSchema } from "@/lib/validation/push";
+import { getCurrentUser, requireRole } from "@/server/auth";
 import { alerts } from "@/server/services/alerts";
 
 /** FormData → plain object for Zod (last value wins; files ignored). */
@@ -63,4 +65,28 @@ export async function notificationAction(formData: FormData): Promise<void> {
     data.action === "read" ? data.notificationId : undefined,
   );
   backToAlerts(null, { notice: data.action });
+}
+
+/**
+ * Called by the push toggle (client component) with the browser's subscription. Returns a
+ * result instead of redirecting, so the button can show what happened.
+ */
+export async function savePushSubscription(
+  subscription: unknown,
+): Promise<{ ok: true } | { ok: false; error: "SIGNED_OUT" | "UNSUPPORTED" }> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "SIGNED_OUT" };
+  const parsed = pushSubscriptionSchema.safeParse(subscription);
+  if (!parsed.success) return { ok: false, error: "UNSUPPORTED" };
+  const userAgent = (await headers()).get("user-agent");
+  await alerts.savePushSubscription(user.id, parsed.data, userAgent);
+  return { ok: true };
+}
+
+export async function removePushSubscription(input: unknown): Promise<{ ok: boolean }> {
+  const user = await getCurrentUser();
+  const parsed = pushEndpointSchema.safeParse(input);
+  if (!user || !parsed.success) return { ok: false };
+  await alerts.removePushSubscription(user.id, parsed.data.endpoint);
+  return { ok: true };
 }

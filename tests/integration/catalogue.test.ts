@@ -9,20 +9,22 @@ import { testDb } from "./setup";
 const expectedCategoryCount = categories.reduce((n, c) => n + 1 + (c.children?.length ?? 0), 0);
 
 describe("seed", () => {
-  it("creates the category tree and the mock retailer, and is idempotent", async () => {
+  it("creates the category tree, Amazon UK and the mock retailer, and is idempotent", async () => {
     const first = await runSeed(testDb, { includeDevelopmentData: true });
     const second = await runSeed(testDb, { includeDevelopmentData: true });
 
-    expect(first).toEqual({ categoryCount: expectedCategoryCount, retailerCount: 1 });
+    expect(first).toEqual({ categoryCount: expectedCategoryCount, retailerCount: 2 });
     expect(second).toEqual(first);
     expect(await testDb.category.count()).toBe(expectedCategoryCount);
-    expect(await testDb.retailer.count()).toBe(1);
+    expect(await testDb.retailer.count()).toBe(2);
     expect(await testDb.product.count()).toBe(0);
   });
 
   it("never creates the mock retailer without development data", async () => {
     await runSeed(testDb, { includeDevelopmentData: false });
-    expect(await testDb.retailer.count()).toBe(0);
+    expect(await testDb.retailer.findMany({ select: { slug: true } })).toEqual([
+      { slug: "amazon-uk" },
+    ]);
   });
 });
 
@@ -54,7 +56,8 @@ describe("category and retailer repositories", () => {
     expect(mock).toMatchObject({ integrationType: "MOCK", status: "ACTIVE" });
     expect(await repo.findById(mock!.id)).toMatchObject({ slug: "mock-retailer" });
     expect(await repo.listByStatus()).toHaveLength(1);
-    expect(await repo.listByStatus("PAUSED")).toHaveLength(0);
+    // Amazon UK is seeded paused until it is configured.
+    expect((await repo.listByStatus("PAUSED")).map((r) => r.slug)).toEqual(["amazon-uk"]);
   });
 });
 

@@ -9,6 +9,7 @@ import {
   createAlertMatchingService,
   type MatchSummary,
 } from "@/server/services/alerts/alert-matching.service";
+import { pushDeliveryFromEnv } from "@/server/services/alerts/push-delivery.service";
 import {
   createDealDetectionService,
   type DetectionSummary,
@@ -91,6 +92,19 @@ const LEASES: Record<JobName, number> = {
   "process-alerts": 10 * MINUTE_MS,
 };
 
+/**
+ * Notifies alerts about deals just published (auto-publish retailers) or raised to a higher
+ * level. Runs after every detection pass so pings go out within the same job.
+ */
+function notifyAlerts(ctx: JobContext, settings: JobSettings): Promise<MatchSummary> {
+  return createAlertMatchingService(ctx.client, {
+    push: pushDeliveryFromEnv(ctx.client, ctx.env),
+  }).matchDeals({
+    now: ctx.now,
+    since: new Date(ctx.now.getTime() - settings.alertWindowMs),
+  });
+}
+
 function summarise(summary: DetectionSummary) {
   const { errors, ...counts } = summary;
   for (const e of errors)
@@ -163,7 +177,7 @@ const JOBS: Record<
       now: ctx.now,
       since: ctx.now,
     });
-    return { retailers, deals: summarise(deals) };
+    return { retailers, deals: summarise(deals), alerts: await notifyAlerts(ctx, settings) };
   },
 
   /** Re-prices the most important listings of each retailer, then detects deals on them. */
@@ -190,7 +204,7 @@ const JOBS: Record<
       now: ctx.now,
       since: ctx.now,
     });
-    return { retailers, deals: summarise(deals) };
+    return { retailers, deals: summarise(deals), alerts: await notifyAlerts(ctx, settings) };
   },
 
   async "detect-deals"(ctx, settings) {
@@ -199,7 +213,7 @@ const JOBS: Record<
       now: ctx.now,
       since,
     });
-    return { deals: summarise(deals) };
+    return { deals: summarise(deals), alerts: await notifyAlerts(ctx, settings) };
   },
 
   async "expire-deals"(ctx) {
@@ -209,11 +223,7 @@ const JOBS: Record<
 
   /** Notifies users whose alerts match recently published deals. */
   async "process-alerts"(ctx, settings) {
-    const alerts = await createAlertMatchingService(ctx.client).matchDeals({
-      now: ctx.now,
-      since: new Date(ctx.now.getTime() - settings.alertWindowMs),
-    });
-    return { alerts };
+    return { alerts: await notifyAlerts(ctx, settings) };
   },
 };
 

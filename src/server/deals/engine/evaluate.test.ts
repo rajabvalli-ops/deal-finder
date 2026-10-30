@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { computePriceStats, type PriceObservation, type PriceStats } from "@/server/pricing";
-import { DEFAULT_DEAL_ENGINE_CONFIG, thresholdsFor } from "./config";
+import { dealLevel, DEFAULT_DEAL_ENGINE_CONFIG, isHigherLevel, thresholdsFor } from "./config";
 import { DEAL_ENGINE_VERSION, evaluateDeal } from "./evaluate";
 import type { DealEvaluation, DealEvaluationInput } from "./types";
 
@@ -350,3 +350,52 @@ function at(days: number, hours = 0) {
 function obs(days: number, price: number): PriceObservation {
   return { price, currency: "GBP", availability: "IN_STOCK", observedAt: at(days) };
 }
+
+describe("evaluateDeal — levels", () => {
+  /** Current price `current` after 100 days at £100. */
+  const dropTo = (current: number) =>
+    evaluateDeal(
+      input({
+        current,
+        lowest: current,
+        previous: 10000,
+        avg30: 10000,
+        avg90: 10000,
+      }),
+    );
+
+  it.each([
+    [8000, "NORMAL"],
+    [6500, "BIG_DROP"],
+    [3000, "PRICE_ERROR"],
+    [500, "PRICE_ERROR"],
+  ] as const)("£%d → %s", (current, level) => {
+    expect(dropTo(current).candidate?.level).toBe(level);
+  });
+
+  it("leads its reasons with the level", () => {
+    expect(dropTo(6500).candidate?.reasons[0]).toBe("Big price drop: 35% off");
+    expect(dropTo(2000).candidate?.reasons[0]).toBe(
+      "Possible price error: 80% off is unusually deep — retailers often correct or cancel these",
+    );
+    expect(dropTo(8000).candidate?.reasons[0]).toMatch(/^20% below/);
+  });
+});
+
+describe("level helpers", () => {
+  it("compares levels", () => {
+    expect(isHigherLevel("PRICE_ERROR", "BIG_DROP")).toBe(true);
+    expect(isHigherLevel("BIG_DROP", "BIG_DROP")).toBe(false);
+    expect(isHigherLevel("NORMAL", "BIG_DROP")).toBe(false);
+  });
+
+  it("uses the configured bands", () => {
+    const config = {
+      ...DEFAULT_DEAL_ENGINE_CONFIG,
+      levels: { bigDropBps: 1000, priceErrorBps: 2000 },
+    };
+    expect(dealLevel(999, config)).toBe("NORMAL");
+    expect(dealLevel(1000, config)).toBe("BIG_DROP");
+    expect(dealLevel(2000, config)).toBe("PRICE_ERROR");
+  });
+});

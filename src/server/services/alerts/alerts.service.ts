@@ -7,6 +7,8 @@ import {
   type NotificationRow,
 } from "@/server/db/repositories/notification.repository";
 import { createPublicRepository } from "@/server/db/repositories/public.repository";
+import { createPushSubscriptionRepository } from "@/server/db/repositories/push-subscription.repository";
+import type { PushSubscriptionInput } from "@/lib/validation/push";
 import type { DbClient } from "@/server/db/types";
 
 export type AlertErrorCode =
@@ -20,7 +22,8 @@ export type AlertErrorCode =
 
 /** Messages shown on the alerts page; keyed by code so no user input is ever reflected. */
 export const ALERT_ERROR_MESSAGES: Record<AlertErrorCode, string> = {
-  INVALID_INPUT: "Please check the form: choose a keyword, a category or a product to watch.",
+  INVALID_INPUT:
+    "Please check the form: choose a keyword, a category, a product or a kind of drop to watch.",
   NOT_FOUND: "That alert or notification no longer exists.",
   LIMIT_REACHED: `You can keep up to ${MAX_ALERTS_PER_USER} alerts. Delete one to add another.`,
   VAGUE_KEYWORD: "That keyword is too general to match anything. Try a product name or brand.",
@@ -77,6 +80,7 @@ export function createAlertsService(client: DbClient) {
   const alerts = createAlertRepository(client);
   const notifications = createNotificationRepository(client);
   const publicRepo = createPublicRepository(client);
+  const pushSubscriptions = createPushSubscriptionRepository(client);
 
   return {
     async create(userId: string, input: AlertInput): Promise<AlertResult> {
@@ -101,6 +105,7 @@ export function createAlertsService(client: DbClient) {
         retailerId: retailer?.id ?? null,
         maxPrice: input.maxPrice,
         minDiscountBps: input.minDiscountBps,
+        minLevel: input.minLevel,
       });
       return okResult;
     },
@@ -122,6 +127,7 @@ export function createAlertsService(client: DbClient) {
           retailerName: a.retailer?.name ?? null,
           maxPrice: a.maxPrice,
           minDiscountBps: a.minDiscountBps,
+          minLevel: a.minLevel,
         };
         return {
           id: a.id,
@@ -146,6 +152,30 @@ export function createAlertsService(client: DbClient) {
         notifications.countUnread(userId),
       ]);
       return { items: rows.map(toNotificationView), unread };
+    },
+
+    /** Turns on push for this browser (its subscription moves to this account if it had another). */
+    async savePushSubscription(
+      userId: string,
+      subscription: PushSubscriptionInput,
+      userAgent: string | null,
+    ): Promise<void> {
+      await pushSubscriptions.save({
+        userId,
+        endpoint: subscription.endpoint,
+        p256dh: subscription.keys.p256dh,
+        auth: subscription.keys.auth,
+        userAgent: userAgent?.slice(0, 300) ?? null,
+      });
+    },
+
+    removePushSubscription(userId: string, endpoint: string): Promise<boolean> {
+      return pushSubscriptions.deleteOwned(userId, endpoint);
+    },
+
+    /** Browsers (devices) this user gets push notifications on. */
+    pushDeviceCount(userId: string): Promise<number> {
+      return pushSubscriptions.countForUser(userId);
     },
 
     /**

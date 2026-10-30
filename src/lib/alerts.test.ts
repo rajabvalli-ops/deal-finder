@@ -4,6 +4,7 @@ import {
   alertHrefForSearch,
   alertNotificationContent,
   alertWatching,
+  DEAL_LEVEL_LABELS,
 } from "./alerts";
 import { parseSearchParams } from "./validation/search";
 
@@ -38,6 +39,7 @@ describe("alertNotificationContent", () => {
       dealPrice: 2999,
       discountBps: 2500,
       retailerName: "Example Shop",
+      level: "NORMAL" as const,
     };
     expect(alertNotificationContent({ ...deal, referenceType: "PREVIOUS" })).toEqual({
       subject: "Price alert: Glass Kettle",
@@ -46,6 +48,42 @@ describe("alertNotificationContent", () => {
     expect(alertNotificationContent({ ...deal, referenceType: "AVG_30" }).body).toContain(
       "below its recent average price",
     );
+  });
+});
+
+describe("levels", () => {
+  const deal = {
+    title: "Glass Kettle",
+    dealPrice: 999,
+    discountBps: 7500,
+    retailerName: "Example Shop",
+    referenceType: "AVG_30" as const,
+  };
+
+  it("headlines big drops and possible price errors, with a warning for errors", () => {
+    expect(alertNotificationContent({ ...deal, level: "BIG_DROP" }).subject).toBe(
+      "Big price drop: Glass Kettle",
+    );
+    const error = alertNotificationContent({ ...deal, level: "PRICE_ERROR" });
+    expect(error.subject).toBe("Possible price error: Glass Kettle");
+    expect(error.body).toMatch(
+      /75% below its recent average price\. This may be a pricing mistake/,
+    );
+  });
+
+  it("describes level-only alerts", () => {
+    expect(alertWatching(none)).toBe("Everything");
+    expect(alertCondition({ maxPrice: null, minDiscountBps: null, minLevel: "PRICE_ERROR" })).toBe(
+      "Possible price errors only",
+    );
+    expect(alertCondition({ maxPrice: 2000, minDiscountBps: null, minLevel: "BIG_DROP" })).toBe(
+      "Big drops and price errors only, £20.00 or less",
+    );
+    expect(DEAL_LEVEL_LABELS).toEqual({
+      NORMAL: null,
+      BIG_DROP: "Big drop",
+      PRICE_ERROR: "Possible price error",
+    });
   });
 });
 

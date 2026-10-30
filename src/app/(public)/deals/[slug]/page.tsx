@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AffiliateDisclosure } from "@/components/public/affiliate-disclosure";
 import { Breadcrumbs, type Crumb } from "@/components/public/breadcrumbs";
-import { DealGrid } from "@/components/public/deal-card";
+import { DealGrid, LevelBadge } from "@/components/public/deal-card";
 import { OutboundButton } from "@/components/public/outbound-button";
 import { PriceBlock } from "@/components/public/price-block";
 import { ProductImage } from "@/components/public/product-image";
@@ -74,7 +74,16 @@ export default async function DealPage({ params }: Props) {
               </Link>
             </p>
             <h1 className="text-2xl font-bold sm:text-3xl">{deal.title}</h1>
+            <LevelBadge level={deal.level} />
           </div>
+
+          {deal.level === "PRICE_ERROR" ? (
+            <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+              This price is far below what this product usually sells for, so it may be a pricing
+              mistake. Retailers often correct these quickly and can cancel orders placed at a wrong
+              price.
+            </p>
+          ) : null}
 
           <PriceBlock deal={deal} size="lg" />
 

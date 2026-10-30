@@ -20,6 +20,7 @@ describe("alertFormSchema", () => {
       dealSlug: null,
       maxPrice: 4999,
       minDiscountBps: 2000,
+      minLevel: null,
     });
   });
 
@@ -31,7 +32,14 @@ describe("alertFormSchema", () => {
       dealSlug: "some-deal-1",
       maxPrice: null,
       minDiscountBps: null,
+      minLevel: null,
     });
+  });
+
+  it("accepts a kind of drop on its own", () => {
+    expect(parse({ level: "price-error" }).data?.minLevel).toBe("PRICE_ERROR");
+    expect(parse({ level: "big-drop", max: "100" }).data?.minLevel).toBe("BIG_DROP");
+    expect(parse({ level: "huge" }).success).toBe(false);
   });
 
   it("needs a keyword, a category or a product", () => {

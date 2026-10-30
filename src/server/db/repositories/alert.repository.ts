@@ -1,5 +1,5 @@
 import { Prisma } from "@/generated/prisma/client";
-import type { ReferenceType } from "@/lib/public-types";
+import type { DealLevel, ReferenceType } from "@/lib/public-types";
 import type { DbClient } from "../types";
 import { PUBLIC_DEAL_WHERE } from "./public.repository";
 import { PRODUCT_DOCUMENT } from "./search.repository";
@@ -12,6 +12,7 @@ export type AlertCreate = {
   retailerId: string | null;
   maxPrice: number | null;
   minDiscountBps: number | null;
+  minLevel: DealLevel | null;
 };
 
 export const alertListInclude = {
@@ -26,10 +27,12 @@ export type AlertMatch = {
   alertId: string;
   userId: string;
   dealId: string;
+  dealSlug: string;
   title: string;
   dealPrice: number;
   discountBps: number;
   referenceType: ReferenceType;
+  level: DealLevel;
   retailerName: string;
 };
 
@@ -82,8 +85,10 @@ export function createAlertRepository(client: DbClient) {
 
     /**
      * Pairs of active alerts and public deals that satisfy them and haven't been notified yet.
-     * A deal only matches alerts that existed when it was published, so a new alert doesn't
-     * fire for deals already on the site. Categories include their subcategories.
+     * A deal's news is its publication, or a later rise in level (a deeper drop that became a
+     * big drop or possible price error); it only matches alerts that existed by then, so a new
+     * alert doesn't fire for deals already on the site. Each (alert, deal, level) notifies
+     * once. Categories include their subcategories.
      */
     findMatches(params: { since: Date; dealIds?: string[]; limit: number }): Promise<AlertMatch[]> {
       const onlyDeals = params.dealIds
@@ -95,12 +100,14 @@ export function createAlertRepository(client: DbClient) {
           UNION ALL
           SELECT t."rootId", c."id" FROM "Category" c JOIN tree t ON c."parentId" = t."id"
         )
-        SELECT a."id" AS "alertId", a."userId", d."id" AS "dealId", d."title", d."dealPrice",
-               d."discountBps", d."referenceType"::text AS "referenceType", r."name" AS "retailerName"
+        SELECT a."id" AS "alertId", a."userId", d."id" AS "dealId", d."slug" AS "dealSlug",
+               d."title", d."dealPrice",
+               d."discountBps", d."referenceType"::text AS "referenceType",
+               d."level"::text AS "level", r."name" AS "retailerName"
         FROM "Alert" a
         JOIN "Deal" d ON d."status" = 'PUBLISHED'
-          AND d."publishedAt" >= ${params.since}
-          AND d."publishedAt" >= a."createdAt"
+          AND (d."publishedAt" >= ${params.since} OR d."levelRaisedAt" >= ${params.since})
+          AND GREATEST(d."publishedAt", d."levelRaisedAt") >= a."createdAt"
         JOIN "Product" p ON p."id" = d."productId" AND p."isActive"
         JOIN "Retailer" r ON r."id" = d."retailerId" AND r."status" = 'ACTIVE'
         WHERE a."isActive"
@@ -111,11 +118,13 @@ export function createAlertRepository(client: DbClient) {
             SELECT 1 FROM tree t WHERE t."rootId" = a."categoryId" AND t."id" = p."categoryId"))
           AND (a."maxPrice" IS NULL OR d."dealPrice" <= a."maxPrice")
           AND (a."minDiscountBps" IS NULL OR d."discountBps" >= a."minDiscountBps")
+          AND (a."minLevel" IS NULL OR d."level" >= a."minLevel")
           AND (a."keyword" IS NULL OR (
             numnode(plainto_tsquery('english', a."keyword")) > 0
             AND ${PRODUCT_DOCUMENT} @@ plainto_tsquery('english', a."keyword")))
           AND NOT EXISTS (
-            SELECT 1 FROM "Notification" n WHERE n."dedupeKey" = a."id" || ':' || d."id")
+            SELECT 1 FROM "Notification" n
+            WHERE n."dedupeKey" = a."id" || ':' || d."id" || ':' || d."level"::text)
         ORDER BY d."publishedAt", a."id"
         LIMIT ${params.limit}`;
     },

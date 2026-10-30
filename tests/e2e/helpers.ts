@@ -31,6 +31,12 @@ export function createDealFixture(): DealFixture {
   return JSON.parse(output);
 }
 
+/** Seeds reference data and returns Amazon UK's retailer id. */
+export function seedReferenceData(): { id: string } {
+  const output = tsx("tests/e2e/fixtures/seed-reference.ts").trim().split("\n").at(-1)!;
+  return JSON.parse(output);
+}
+
 export async function signUp(page: Page, email: string, next = "/") {
   await page.goto(`/sign-up?next=${encodeURIComponent(next)}`);
   await page.getByLabel("Email").fill(email);

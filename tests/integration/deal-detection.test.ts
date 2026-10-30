@@ -55,7 +55,7 @@ describe("deal detection", () => {
       title: product.title,
       dealPrice: 8000,
       referenceType: "AVG_30",
-      engineVersion: "deal-engine@1",
+      engineVersion: "deal-engine@2",
       detectedAt: NOW,
     });
     expect(deal.slug).toMatch(/^example-wireless-headphones-[0-9a-f]{6}$/);

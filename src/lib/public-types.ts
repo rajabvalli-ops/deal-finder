@@ -3,6 +3,9 @@
 
 export type ReferenceType = "PREVIOUS" | "AVG_30" | "AVG_90";
 
+/** How striking a deal is: a big drop (35%+) or a possible price error (70%+). */
+export type DealLevel = "NORMAL" | "BIG_DROP" | "PRICE_ERROR";
+
 export type PublicDealSummary = {
   slug: string;
   title: string;
@@ -17,6 +20,7 @@ export type PublicDealSummary = {
   savingAmount: number;
   discountBps: number;
   historicalLow: number | null;
+  level: DealLevel;
   /** When the listing's price was last checked. */
   priceCheckedAt: Date | null;
   publishedAt: Date | null;

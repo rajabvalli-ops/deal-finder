@@ -24,7 +24,7 @@ test("lets an editor into the admin area, then signs out", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1, name: "Overview" })).toBeVisible();
   await expect(page.getByText(`Signed in as ${email}`)).toBeVisible();
 
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await page.getByRole("main").getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/$/);
   await page.goto("/admin");
   await expect(page).toHaveURL(/\/sign-in/);

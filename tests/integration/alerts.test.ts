@@ -154,7 +154,7 @@ describe("matching", () => {
       description: "Matches any kettle",
       publishedMinutesAgo: 2,
     });
-    expect(await match()).toEqual({ notified: 2, alerts: 1, more: false });
+    expect(await match()).toEqual({ notified: 2, alerts: 1, more: false, pushed: 0 });
     expect((await notifiedTitles()).sort()).toEqual(["Glass Kettle", "Toaster"]);
   });
 
@@ -266,12 +266,14 @@ describe("matching", () => {
       notified: 1,
       alerts: 1,
       more: true,
+      pushed: 0,
     });
     expect(await small.matchDeals({ now: NOW, since: new Date(0) })).toMatchObject({ notified: 1 });
     expect(await small.matchDeals({ now: NOW, since: new Date(0) })).toEqual({
       notified: 0,
       alerts: 0,
       more: false,
+      pushed: 0,
     });
   });
 
@@ -293,7 +295,7 @@ describe("process-alerts job", () => {
     expect(report).toEqual({
       job: "process-alerts",
       status: "completed",
-      alerts: { notified: 1, alerts: 1, more: false },
+      alerts: { notified: 1, alerts: 1, more: false, pushed: 0 },
     });
     expect(await service.markRead(user.id, NOW)).toBe(1);
   });

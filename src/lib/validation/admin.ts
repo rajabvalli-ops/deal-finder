@@ -46,6 +46,10 @@ export const retailerUpdateSchema = z.object({
   retailerId: idSchema,
   status: z.enum(["ACTIVE", "PAUSED", "DISABLED"]),
   trustScore: z.coerce.number().int().min(0).max(100),
+  autoPublish: z
+    .union([z.literal("on"), z.literal("")])
+    .optional()
+    .transform((v) => v === "on"),
 });
 
 export const categorySchema = z.object({

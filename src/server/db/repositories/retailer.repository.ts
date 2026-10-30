@@ -1,3 +1,4 @@
+import type { Prisma } from "@/generated/prisma/client";
 import { RetailerStatus, type DbClient, type Retailer } from "../types";
 
 export function createRetailerRepository(client: DbClient) {
@@ -10,8 +11,15 @@ export function createRetailerRepository(client: DbClient) {
       return client.retailer.findUnique({ where: { slug } });
     },
 
-    update(id: string, data: { status: RetailerStatus; trustScore: number }): Promise<Retailer> {
+    update(
+      id: string,
+      data: { status: RetailerStatus; trustScore: number; autoPublish: boolean },
+    ): Promise<Retailer> {
       return client.retailer.update({ where: { id }, data });
+    },
+
+    updateAdapterConfig(id: string, adapterConfig: Prisma.InputJsonValue): Promise<Retailer> {
+      return client.retailer.update({ where: { id }, data: { adapterConfig } });
     },
 
     listByStatus(status: RetailerStatus = RetailerStatus.ACTIVE): Promise<Retailer[]> {

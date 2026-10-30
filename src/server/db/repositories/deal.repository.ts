@@ -15,6 +15,7 @@ export type DealSnapshot = {
   score: number;
   scoreBreakdown: unknown;
   engineVersion: string;
+  level: "NORMAL" | "BIG_DROP" | "PRICE_ERROR";
 };
 
 export type NewDeal = DealSnapshot & {
@@ -73,10 +74,20 @@ export function createDealRepository(client: DbClient) {
       return client.deal.update({ where: { id }, data });
     },
 
-    updateSnapshot(id: string, snapshot: DealSnapshot, summary: string | null) {
+    updateSnapshot(
+      id: string,
+      snapshot: DealSnapshot,
+      summary: string | null,
+      levelRaisedAt?: Date,
+    ) {
       return client.deal.update({
         where: { id },
-        data: { ...snapshot, scoreBreakdown: toJson(snapshot.scoreBreakdown), summary },
+        data: {
+          ...snapshot,
+          scoreBreakdown: toJson(snapshot.scoreBreakdown),
+          summary,
+          ...(levelRaisedAt ? { levelRaisedAt } : {}),
+        },
       });
     },
 

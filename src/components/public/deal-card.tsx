@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DEAL_LEVEL_LABELS } from "@/lib/alerts";
 import { formatBps, formatPrice } from "@/lib/money";
 import { isAtHistoricalLow, type PublicDealSummary } from "@/lib/public-types";
 import { ProductImage } from "./product-image";
@@ -11,8 +12,11 @@ export function DealCard({ deal }: { deal: PublicDealSummary }) {
           src={deal.imageUrl}
           label={deal.brand ?? deal.category?.name ?? deal.retailer.name}
         />
-        <span className="absolute top-2 left-2 rounded-md bg-saving-600 px-2 py-0.5 text-sm font-bold text-white">
-          −{formatBps(deal.discountBps)}
+        <span className="absolute top-2 left-2 flex flex-col items-start gap-1">
+          <span className="rounded-md bg-saving-600 px-2 py-0.5 text-sm font-bold text-white">
+            −{formatBps(deal.discountBps)}
+          </span>
+          <LevelBadge level={deal.level} />
         </span>
         {isAtHistoricalLow(deal) ? (
           <span className="absolute top-2 right-2 rounded-md bg-surface px-2 py-0.5 text-xs font-semibold text-ink shadow">
@@ -38,6 +42,19 @@ export function DealCard({ deal }: { deal: PublicDealSummary }) {
         </div>
       </div>
     </article>
+  );
+}
+
+/** "Big drop" / "Possible price error" label; nothing for ordinary deals. */
+export function LevelBadge({ level }: { level: PublicDealSummary["level"] }) {
+  const label = DEAL_LEVEL_LABELS[level];
+  if (!label) return null;
+  return (
+    <span
+      className={`rounded-md px-2 py-0.5 text-xs font-bold text-white ${level === "PRICE_ERROR" ? "bg-red-700" : "bg-amber-700"}`}
+    >
+      {label}
+    </span>
   );
 }
 
