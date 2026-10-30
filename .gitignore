@@ -13,3 +13,4 @@ test-results
 next-env.d.ts
 *.tsbuildinfo
 !.env.example
+src/generated

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
+import { AffiliateDisclosure } from "@/components/public/affiliate-disclosure";
 import { site, primaryNav } from "@/lib/site";
 import { env } from "@/server/env";
 import "./globals.css";
@@ -39,6 +40,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     </Link>
                   </li>
                 ))}
+                <li>
+                  <Link href="/sign-in" className="hover:text-brand-600">
+                    Sign in
+                  </Link>
+                </li>
               </ul>
             </nav>
           </div>
@@ -47,8 +53,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {children}
         </main>
         <footer className="border-t border-line bg-surface-muted">
-          <div className="mx-auto max-w-6xl px-4 py-6 text-sm text-ink-muted">
-            © {new Date().getFullYear()} {site.name}
+          <div className="mx-auto max-w-6xl space-y-2 px-4 py-6 text-sm text-ink-muted">
+            <AffiliateDisclosure compact />
+            <p>
+              © {new Date().getFullYear()} {site.name}
+            </p>
           </div>
         </footer>
       </body>

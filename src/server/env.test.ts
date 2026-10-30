@@ -1,39 +1,93 @@
 import { describe, expect, it } from "vitest";
 import { parseEnv } from "./env";
 
+const DATABASE_URL = "postgresql://user:pass@localhost:5432/db";
+const BETTER_AUTH_SECRET = "a".repeat(32);
+
 describe("parseEnv", () => {
   it("defaults the site URL outside production", () => {
-    expect(parseEnv({ NODE_ENV: "development" })).toEqual({
+    expect(parseEnv({ NODE_ENV: "development", DATABASE_URL })).toEqual({
       NODE_ENV: "development",
+      DATABASE_URL,
+      CRON_SECRET: undefined,
+      BETTER_AUTH_SECRET: "development-only-auth-secret-not-for-production",
       NEXT_PUBLIC_SITE_URL: "http://localhost:3000",
     });
   });
 
   it("defaults NODE_ENV to development", () => {
-    expect(parseEnv({}).NODE_ENV).toBe("development");
+    expect(parseEnv({ DATABASE_URL }).NODE_ENV).toBe("development");
   });
 
   it("strips trailing slashes from the site URL", () => {
     const env = parseEnv({
       NODE_ENV: "production",
+      DATABASE_URL,
+      BETTER_AUTH_SECRET,
       NEXT_PUBLIC_SITE_URL: "https://example.co.uk/",
     });
     expect(env.NEXT_PUBLIC_SITE_URL).toBe("https://example.co.uk");
   });
 
   it("requires the site URL in production", () => {
-    expect(() => parseEnv({ NODE_ENV: "production" })).toThrow(/NEXT_PUBLIC_SITE_URL is required/);
+    expect(() => parseEnv({ NODE_ENV: "production", DATABASE_URL, BETTER_AUTH_SECRET })).toThrow(
+      /NEXT_PUBLIC_SITE_URL is required/,
+    );
   });
 
   it("rejects an invalid site URL", () => {
-    expect(() => parseEnv({ NEXT_PUBLIC_SITE_URL: "not a url" })).toThrow(/NEXT_PUBLIC_SITE_URL/);
+    expect(() => parseEnv({ DATABASE_URL, NEXT_PUBLIC_SITE_URL: "not a url" })).toThrow(
+      /NEXT_PUBLIC_SITE_URL/,
+    );
   });
 
-  it("rejects non-http protocols", () => {
-    expect(() => parseEnv({ NEXT_PUBLIC_SITE_URL: "javascript:alert(1)" })).toThrow();
+  it("rejects non-http site URL protocols", () => {
+    expect(() => parseEnv({ DATABASE_URL, NEXT_PUBLIC_SITE_URL: "javascript:alert(1)" })).toThrow();
   });
 
   it("rejects an unknown NODE_ENV", () => {
-    expect(() => parseEnv({ NODE_ENV: "staging" })).toThrow(/NODE_ENV/);
+    expect(() => parseEnv({ DATABASE_URL, NODE_ENV: "staging" })).toThrow(/NODE_ENV/);
+  });
+
+  it("requires DATABASE_URL", () => {
+    expect(() => parseEnv({})).toThrow(/DATABASE_URL/);
+  });
+
+  it.each(["postgres://u:p@host/db", "postgresql://u:p@host:6543/db?sslmode=require"])(
+    "accepts the Postgres URL %s",
+    (url) => {
+      expect(parseEnv({ DATABASE_URL: url }).DATABASE_URL).toBe(url);
+    },
+  );
+
+  it("rejects a non-Postgres DATABASE_URL", () => {
+    expect(() => parseEnv({ DATABASE_URL: "mysql://u:p@host/db" })).toThrow(
+      /postgres:\/\/ or postgresql:\/\//,
+    );
+  });
+
+  it("accepts a long CRON_SECRET and treats an empty one as unset", () => {
+    const secret = "x".repeat(32);
+    expect(parseEnv({ DATABASE_URL, CRON_SECRET: secret }).CRON_SECRET).toBe(secret);
+    expect(parseEnv({ DATABASE_URL, CRON_SECRET: "" }).CRON_SECRET).toBeUndefined();
+  });
+
+  it("rejects a short CRON_SECRET", () => {
+    expect(() => parseEnv({ DATABASE_URL, CRON_SECRET: "short" })).toThrow(
+      /at least 32 characters/,
+    );
+  });
+
+  it("requires BETTER_AUTH_SECRET in production and validates its length", () => {
+    const prod = {
+      NODE_ENV: "production",
+      DATABASE_URL,
+      NEXT_PUBLIC_SITE_URL: "https://x.example",
+    };
+    expect(() => parseEnv(prod)).toThrow(/BETTER_AUTH_SECRET is required in production/);
+    expect(() => parseEnv({ ...prod, BETTER_AUTH_SECRET: "short" })).toThrow(
+      /at least 32 characters/,
+    );
+    expect(parseEnv({ ...prod, BETTER_AUTH_SECRET }).BETTER_AUTH_SECRET).toBe(BETTER_AUTH_SECRET);
   });
 });

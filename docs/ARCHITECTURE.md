@@ -126,7 +126,7 @@ Key principles:
    (→ Product 0..1, → Deal 0..1)   (→ Deal/Product 0..1, anonymous allowed)
 
  Supporting tables (not in the original entity list, recommended):
-   Account / Session / VerificationToken ──► User      (Auth.js)
+   Account / Session / Verification ──► User           (Better Auth; RateLimit standalone)
    ImportRun ──► Retailer                              (job observability)
    AuditLog  ──► User                                  (admin action trail)
 ```
@@ -178,7 +178,22 @@ Key principles:
 
 ## 3. Proposed Prisma schema
 
-> Proposal only — not created yet. Will be refined in the database stage.
+> **Implemented in Stage 3.** [`prisma/schema.prisma`](../prisma/schema.prisma) and
+> `prisma/migrations/` are now the source of truth; the listing below is the original
+> proposal. Differences made during implementation:
+>
+> - **Prisma 7:** `prisma-client` generator writing to `src/generated/prisma` (git-ignored,
+>   generated on `postinstall`); connection URLs live in `prisma.config.ts`, not the schema;
+>   the runtime uses the `@prisma/adapter-pg` driver adapter.
+> - `Deal.variantId` is **required** (every product has a default variant), and
+>   `Deal.referenceType` is an enum (`ReferencePriceType`). `ImportRun.jobType` is an enum.
+> - All timestamps are `timestamptz`; explicit `onDelete` behaviour on every relation.
+> - Raw-SQL rules in the initial migration: CHECK constraints (non-negative pence, ISO
+>   currency format, rating 0–5, trust score 0–100, `saving = reference − deal price`,
+>   discount 0–10 000 bps, score 0–100, alert needs a keyword/product/category, category
+>   not its own parent), plus partial unique indexes for **one default variant per
+>   product** and **one active deal per variant**.
+> - Full-text search indexes are deferred to the search stage.
 
 ```prisma
 generator client {
@@ -666,7 +681,7 @@ Notes:
 │   │   │   ├── retailers/ categories/ users/ alerts/ clicks/ imports/
 │   │   ├── go/[code]/route.ts               # outbound redirect + click tracking
 │   │   ├── api/
-│   │   │   ├── auth/[...nextauth]/route.ts
+│   │   │   ├── auth/[...all]/route.ts
 │   │   │   ├── cron/{import,refresh-prices,detect-deals,expire-deals,process-alerts,send-notifications}/route.ts
 │   │   │   ├── alerts/route.ts, alerts/[id]/route.ts
 │   │   │   ├── search/route.ts              # (optional JSON API for client filters)
@@ -708,7 +723,7 @@ Notes:
 │   │   ├── notifications/           # Notifier interface, email provider, templates
 │   │   ├── analytics/               # click aggregation, bot detection
 │   │   ├── jobs/                    # job handlers, locking, run bookkeeping
-│   │   ├── auth/                    # Auth.js config, requireRole(), session helpers
+│   │   ├── auth/                    # Better Auth config, requireRole(), session helpers
 │   │   ├── rate-limit/              # RateLimiter interface (memory / Upstash)
 │   │   └── env.ts                   # Zod-validated environment
 │   ├── lib/                         # isomorphic, dependency-free helpers
@@ -740,8 +755,8 @@ where an HTTP endpoint is genuinely required.
 
 | Endpoint                       | Method         | Auth                 | Purpose                               |
 | ------------------------------ | -------------- | -------------------- | ------------------------------------- |
-| `/go/[code]`                   | GET            | public, rate-limited | Record click, 302 to retailer         |
-| `/api/auth/[...nextauth]`      | *              | —                    | Auth.js                               |
+| `/go/[code]`                   | GET / HEAD     | public, rate-limited | Record click, 302 to retailer         |
+| `/api/auth/[...all]`           | *              | —                    | Better Auth                           |
 | `/api/alerts`                  | GET / POST     | user                 | List / create alerts                  |
 | `/api/alerts/[id]`             | PATCH / DELETE | owner                | Update / delete alert                 |
 | `/api/search`                  | GET            | public, rate-limited | JSON search for client-side filter UI |
@@ -754,78 +769,139 @@ where an HTTP endpoint is genuinely required.
 | `/api/health`                  | GET            | public               | Liveness + DB check                   |
 | `/api/v1/*`                    | —              | API key              | _Future_ public/partner API           |
 
-Admin Server Actions (`src/app/admin/**/actions.ts`): `approveDeal`, `rejectDeal`,
-`updateDeal`, `publishDeal`, `expireDeal`, `removeDeal`, `updateRetailer`, … Each
-action: (1) `requireRole('EDITOR'|'ADMIN')`, (2) Zod-parse input, (3) call service,
-(4) write `AuditLog`, (5) `revalidateTag()` affected public pages.
+### Admin dashboard (implemented in Stage 9)
+
+| Page                       | Who         | What                                                                                                                 |
+| -------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------- |
+| `/admin`                   | EDITOR+     | Counts (deals by status, products, retailers, users, alerts, 7-day clicks), recent imports and audit                 |
+| `/admin/deals`             | EDITOR+     | Filter by status, search title/brand, paginate                                                                       |
+| `/admin/deals/[id]`        | EDITOR+     | Snapshot figures, engine reasons and score breakdown, 180-day price chart and stats, actions, edit form, audit trail |
+| `/admin/products`, `/[id]` | EDITOR+     | Search, active/delisted filter; variants, price chart, every observation, the product's deals                        |
+| `/admin/retailers`         | ADMIN edits | Status (active/paused/disabled) and trust score; editors see read-only                                               |
+| `/admin/categories`        | ADMIN edits | Tree view, create (slug from name), rename/move/reorder (slug fixed, cycles refused)                                 |
+| `/admin/users`             | ADMIN only  | Search/filter, change roles (not your own; never the last admin); 404 for editors                                    |
+| `/admin/alerts`            | EDITOR+     | Read-only list (populated by the alerts stage)                                                                       |
+| `/admin/clicks`            | EDITOR+     | 7-day clicks by people vs likely bots, most-clicked deals, click list (bots hidden unless asked for) — Stage 11      |
+
+Server Actions (`src/app/admin/**/actions.ts`): `dealAction` (approve / reject with a required
+reason / publish / expire / remove), `updateDealContent` (title, summary, description,
+featured, end date — never prices or scores), `updateRetailer`, `createCategory`,
+`updateCategory`, `setUserRole`. Each one: (1) `requireRole()` itself, (2) Zod-parses the
+form (`src/lib/validation/admin.ts`), (3) calls a service in `src/server/services/admin/`
+that re-checks the role, applies the workflow and writes the change **and** an `AuditLog`
+row with the acting user in one transaction, (4) `revalidatePath`, (5) redirects back with
+a result code (`?notice=` / `?error=`) that maps to a fixed message — no input is reflected.
+Deal status changes use optimistic concurrency, so two simultaneous approvals can't both
+succeed. Pages are server-rendered; the price chart is a plain SVG with no client JavaScript.
 
 Conventions: Zod on all input; typed `Result<T, E>` from services; errors mapped to
 HTTP status in one helper; no Prisma types leak to the UI (services return DTOs).
 
 ---
 
+### Public website (implemented in Stage 10)
+
+| Route                | Rendering                            | Content                                                                                                                             |
+| -------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `/`                  | Static, revalidated every 5 min      | Featured, latest, at/near historical low (within 3% of the low at detection), popular categories and retailers                      |
+| `/deals`             | Dynamic (`?sort=`, `?page=`)         | All live deals; sort newest / biggest discount / biggest saving / top picks                                                         |
+| `/deals/[slug]`      | ISR (rendered on first visit, 5 min) | Price, named comparison, price-checked time, 180-day chart, 7/30/90-day averages, low/high, product info, related deals, disclosure |
+| `/categories/[slug]` | Dynamic                              | Deals in the category and its subcategories, subcategory links                                                                      |
+| `/retailers/[slug]`  | Dynamic                              | The retailer's deals (disabled retailers 404)                                                                                       |
+
+- **What is public:** only `PUBLISHED` deals whose product is active and whose retailer is
+  `ACTIVE`; anything else 404s. `src/server/services/public/` maps rows to plain types in
+  `src/lib/public-types.ts`, so scores, reviewers and audit data never reach pages.
+- **Honest pricing (CMA guidance):** no bare "was" prices — every saving names its basis
+  ("21.8% below its 30-day average price of £219.99") and every deal shows when its price
+  was last checked, with a reminder to confirm the final price at the retailer.
+- **Affiliate disclosure** in the site footer and beside the price on each deal page.
+- **Caching:** admin Server Actions call `revalidatePath("/", "layout")`, so publishing,
+  editing or expiring a deal refreshes cached public pages immediately. Note: the homepage
+  is prerendered at build time, so **builds need database access**.
+- **Outbound link (Stage 11):** a "Go to {retailer}" button to `/go/[code]` — never the
+  retailer URL itself (§10). Without an active link the page says the link isn't available.
+- Server-rendered with no client JavaScript on public pages; two-column cards on phones.
+
 ## 6. Retailer adapter architecture
 
-### Interface (sketch — not implemented)
+**Implemented in Stage 6** (`src/server/retailers/`, `src/server/services/ingestion/`).
+
+### Interface
 
 ```ts
 interface RetailerAdapter {
-  readonly key: string; // "mock", "awin-feed", …
-  readonly capabilities: {
-    catalogue: boolean; // can list/paginate products
-    priceLookup: boolean; // can fetch prices for known IDs
-    deepLinks: boolean; // can build affiliate deep links
-  };
-  fetchCatalogue(opts: {
-    cursor?: string;
+  readonly key: string; // "mock", later e.g. "awin-feed"
+  readonly allowedHosts: readonly string[]; // product/affiliate URLs must be https on one of these
+  readonly capabilities: { catalogue: boolean; priceLookup: boolean };
+  fetchCatalogue(req: {
+    cursor: string | null;
     limit: number;
-  }): Promise<{ items: NormalisedProduct[]; nextCursor?: string }>;
-  fetchPrices(externalIds: string[]): Promise<NormalisedPrice[]>;
-  buildAffiliateUrl(productUrl: string, ctx: { placement?: string }): string;
+  }): Promise<{ items: NormalisedProduct[]; nextCursor: string | null }>;
+  fetchPrices(productExternalIds: readonly string[]): Promise<NormalisedPriceUpdate[]>; // unknown IDs omitted
+  buildAffiliateUrl(productUrl: string): string;
   healthCheck(): Promise<{ ok: boolean; detail?: string }>;
 }
+type AdapterFactory = (config: unknown, context: { now: () => Date; env }) => RetailerAdapter;
 ```
 
-`NormalisedProduct` / `NormalisedPrice` are the _only_ shape the rest of the
-system understands: prices in pence, ISO currency, `Availability` enum, variants
-array, category hint string, image URL, rating, etc. Each adapter's output is
-validated with the shared Zod schema before ingestion — invalid items are
-counted as failures on the `ImportRun`, never written.
+Adapters only fetch and normalise — they never touch the database. The clock is injected so
+imports can be replayed (used for backfilling the mock catalogue). `NormalisedProduct`
+(`schemas.ts`) is the only shape the rest of the system understands: pence, ISO currency,
+availability enum, https URLs, 1–100 variants with exactly one default, optional free-text
+`categoryHint`.
 
-### Flow
+### Ingestion flow
 
 ```
-Retailer row (adapterKey="mock", adapterConfig={…})
+Retailer row (adapterKey="mock", adapterConfig={productCount: 24})
       │
       ▼
-registry.get(adapterKey)(config, secretsFromEnv) ──► RetailerAdapter instance
-      │  fetchCatalogue / fetchPrices
+registry.createAdapter(retailer, { now, env }) ──► RetailerAdapter
+      │  fetchCatalogue (paged, cursor) / fetchPrices
       ▼
-NormalisedProduct[]  ──Zod──►  ingestion.service
-      │                          • upsert Product by (retailerId, externalId)
-      │                          • upsert variants
-      │                          • append PriceHistory when changed / heartbeat
-      │                          • map category hint → Category (mapping table/rules)
-      │                          • ensure AffiliateLink via adapter.buildAffiliateUrl
-      ▼                          • recompute Product price snapshot (pricing engine)
-deal detection (next job)
+ingestion.service — per item, isolated (one bad item never stops a run):
+   1. Zod-validate against normalisedProductSchema           → else counted as failed
+   2. productUrl must be https on adapter.allowedHosts       → else counted as failed
+   3. categoryHint → slugify → Category by slug (null if no match)
+   4. in one transaction: upsert Product + variants by (retailerId, externalId);
+      append PriceHistory when price/stock/currency changed or ≥ 24h since the last
+      observation (heartbeat); recompute the Product price snapshot with computePriceStats
+   5. ImportRun row: counters, cursor, up to 20 error samples,
+      status SUCCEEDED / PARTIAL (some failed) / FAILED (all failed or adapter threw)
 ```
+
+`importCatalogue` stops after `maxPages` and returns `nextCursor` so a later run can resume
+(the jobs stage will use this to stay within function time limits). `importPrices` refreshes
+known listings; updates for unknown products or variants are counted as failures.
+
+### MockRetailerAdapter
+
+A fictional, deterministic catalogue (`adapters/mock/`): "Mockline" brand, `.invalid` URLs
+(RFC 2606), no images, category hints matching the seeded category slugs. Each product's
+price follows a fixed schedule from a hash of its ID and the date (a 2–5 day sale of 10–25%
+every 20–34 days; out of stock one day in 45), so development data has realistic history
+without randomness. `npm run import -- --backfill-days 90` replays the last 90 days into the
+dev database.
 
 ### Adding a second or third retailer
 
-1. Create `src/server/retailers/adapters/<name>/index.ts` implementing `RetailerAdapter`
-   (plus a feed/API client and a mapper from the source format to `NormalisedProduct`).
-2. Register it in `registry.ts`: `"<name>": (cfg, env) => new NameAdapter(cfg, env)`.
-3. Add its secret names to `env.ts` (Zod) and `.env.example`.
-4. Run the shared **adapter contract test kit** against it with recorded fixtures.
-5. Insert a `Retailer` row (via admin UI) with `adapterKey="<name>"`.
+1. Create `src/server/retailers/adapters/<name>/index.ts` exporting an `AdapterFactory`: parse
+   its `adapterConfig` with Zod, read secrets from `context.env`, map the source format to
+   `NormalisedProduct`, and declare `allowedHosts`.
+2. Register it: one line in `registry.ts` (`"<name>": create<Name>Adapter`).
+3. Add its secret names to `env.ts` and `.env.example`.
+4. In its test file, call `describeAdapterContract("<name>", …)` with an adapter backed by
+   recorded fixtures (no live network in CI). The kit checks pagination terminates without
+   duplicates, every item passes the schema, all product and affiliate URLs stay on allowed
+   hosts, price lookups match the catalogue and omit unknown IDs, output is deterministic for
+   a fixed clock, and the health check passes.
+5. Insert a `Retailer` row with `adapterKey="<name>"` (admin UI in a later stage).
 
-Nothing else changes: ingestion, pricing, deals, admin, public pages, affiliate
-redirects and alerts all operate on normalised data keyed by `retailerId`. Jobs
-iterate over `Retailer` rows with `status=ACTIVE`, so a new retailer is picked up
-automatically. A third retailer on the _same_ affiliate network (e.g. two
-merchants on one feed network) usually needs **no new code** — only a new
-`Retailer` row with a different `adapterConfig` (merchant ID).
+Nothing else changes: ingestion, pricing, deals, admin, public pages, affiliate redirects and
+alerts all operate on normalised data keyed by `retailerId`. A further merchant on an
+already-supported affiliate network needs **no new code** — only another `Retailer` row with a
+different `adapterConfig`.
 
 ---
 
@@ -834,118 +910,200 @@ merchants on one feed network) usually needs **no new code** — only a new
 No AI anywhere in numerical calculations. All functions are pure, integer-based,
 and versioned (`engineVersion`) so published results remain reproducible.
 
-### Pricing engine — `computePriceStats(history, now)`
+### Pricing engine — `computePriceStats(observations, now, config?)`
 
-Input: price observations for one variant (sorted), and `now`.
+**Implemented in Stage 4** (`src/server/pricing/`, version `pricing@1`). Pure function; any
+change to a calculation must bump the version.
 
-| Metric               | Definition                                                                                                                                                                                  |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `current`            | Latest observed price while in stock                                                                                                                                                        |
-| `previous`           | The most recent _different_ price that was held for ≥ N hours (default 24h) — ignores momentary blips                                                                                       |
-| `lowest` / `highest` | Min/max over full history (configurable window, e.g. 365d)                                                                                                                                  |
-| `avg7/30/90`         | **Time-weighted** average over the window: each price weighted by how long it was in effect (irregular sampling would otherwise bias a simple mean). `null` if coverage < 50% of the window |
-| `changePct`          | `(current − previous) / previous`, in bps                                                                                                                                                   |
-| `saving`             | `reference − current` (pence), where reference is chosen below                                                                                                                              |
-| `discountPct`        | `saving / reference`, in bps, rounded half-up                                                                                                                                               |
+Input: price observations for one variant (any order, one currency), and `now`.
+Observations after `now` are ignored. Each observation holds until the next one, capped
+at **72 hours** (`maxObservationGapMs`) so a listing that stops updating isn't assumed to
+keep its price forever. "Purchasable" means `IN_STOCK`, `LOW_STOCK`, `PREORDER` or
+`UNKNOWN` (feeds often omit stock); out-of-stock and discontinued prices are excluded
+from everything except `current`.
 
-### Deal engine — `evaluateDeal(stats, context, config)`
+| Metric                   | Definition                                                                                                                                                                                                                      |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `current`, `isAvailable` | Latest observed price, and whether that observation is purchasable. `currentSince` = start of the current price run                                                                                                             |
+| `previous`               | Walking back from the current run: the first purchasable price **different** from `current` that was held ≥ 24h. Short spikes are skipped. `previousUntil` says when it ended, so the deal engine can reject stale "was" prices |
+| `lowest` / `highest`     | Min/max purchasable price in the supplied history (the caller chooses the window when querying)                                                                                                                                 |
+| `avg7/30/90`             | **Time-weighted** average over the trailing window (each price weighted by how long it applied). `null` unless ≥ 50% of the window is covered by purchasable prices. Exact integer maths, rounded half-up to whole pence        |
+| `changeBps`              | `(current − previous) / previous` in basis points, rounded half away from zero                                                                                                                                                  |
+| `vsPrevious`             | `compareToReference(current, previous)` → `{ saving, discountBps }`; negative means a price rise                                                                                                                                |
 
-1. **Eligibility gates** (all must pass, else no deal):
-   in stock; price observed within the last X hours; min history length (e.g. ≥ 14
-   days of coverage) so we don't trust a new listing's "was" price; retailer ACTIVE;
-   currency GBP.
-2. **Reference price** = the _most conservative_ credible comparison:
-   `min(previous, avg30, avg90)` among available values. This prevents inflated
-   "was" prices from generating fake discounts.
-3. **Thresholds**: `discountPct ≥ minDiscount` (e.g. 10%) AND `saving ≥ minSaving`
-   (e.g. £5), both configurable per category.
-4. **Signals → score 0–100** (weighted, each capped):
-   - depth of discount vs reference
-   - discount vs 90-day average
-   - proximity to historical low (at or below low = max points)
-   - absolute saving (log-scaled so £500 TVs don't dominate)
-   - retailer trust score
-   - social proof (rating/review count) — small weight
-   - penalty: price was raised shortly before the drop ("spike then drop" pattern)
-5. **Output**: `{ isDeal, score, referencePrice, referenceType, saving, discountBps,
-reasons: [...], breakdown: {...} }`. Reasons are human-readable strings shown
-   to admins ("22% below 90-day average", "Lowest price in 180 days").
-6. **Status**: new deals start as `PENDING_REVIEW`. Later, automation can
-   auto-approve above a configured score for trusted retailers.
+`compareToReference(price, reference)` is also exported for the deal engine, which chooses
+the reference (see below). Money helpers (`src/lib/money.ts`) provide `ratioToBps`,
+`parsePounds` (string → pence without floats), `formatPrice` and `formatBps`.
+
+Enforcement: ESLint blocks `Date.now()`, argument-less `new Date()`, `Math.random()` and
+`performance.now()` in engine code, and CI requires 100% test coverage of the engines and
+money helpers.
+
+### Deal engine — `evaluateDeal(input, config?)`
+
+**Implemented in Stage 5** (`src/server/deals/engine/`, version `deal-engine@1`). Pure; input
+is the pricing engine's `PriceStats`, `now`, the retailer (`isActive`, `trustScore`) and the
+product (`rating`, `reviewCount`, `categorySlug`).
+
+1. **Price present**, else `NO_CURRENT_PRICE`.
+2. **Eligibility** (all failures reported together): available to buy; price checked within
+   **24h**; first observation ≥ **14 days** old; currency GBP; retailer active.
+3. **Reference price** = the **lowest** of: the previous price (only if it ended within
+   **60 days**), the 30-day average and the 90-day average. Ties prefer the previous price.
+   None available → `NO_REFERENCE_PRICE`; current price not below it → `NO_DISCOUNT`.
+   This is what defeats "raise then reduce" pricing: a £100 item raised to £150 for three
+   days and "reduced" to £120 is rejected because £120 is above its 30-day average.
+4. **Score 0–100**, from integer arithmetic only:
+
+   | Component        | Max | Full points when                                                  |
+   | ---------------- | --: | ----------------------------------------------------------------- |
+   | `discountDepth`  |  40 | ≥ 50% below the reference (linear)                                |
+   | `historicalLow`  |  20 | at or below the lowest recorded price; scales to 0 at 5% above it |
+   | `belowAverage90` |  15 | ≥ 30% below the 90-day average (linear)                           |
+   | `savingAmount`   |  10 | saving ≥ £100 (tiers: £5 → 2, £10 → 4, £25 → 6, £50 → 8)          |
+   | `retailerTrust`  |  10 | trust score 100 (linear)                                          |
+   | `socialProof`    |   5 | rating ≥ 4 with ≥ 50 reviews (≥ 10 reviews → 3; 3.5+ → 1)         |
+   | **Penalty**      | −15 | previous price > 10% above the 90-day average ("inflated was")    |
+
+5. **Thresholds** (defaults, overridable per category slug): discount ≥ **10%**, saving ≥
+   **£5**, score ≥ **35**. A candidate that misses a threshold is still returned with the
+   rejection codes, so thresholds can be tuned against real data.
+
+Output: `{ isDeal, candidate, rejections }`. `candidate` maps 1:1 onto the `Deal` snapshot
+columns (prices, reference type, saving, discount, score, `scoreBreakdown`, `engineVersion`)
+plus human-readable `reasons` for reviewers, e.g. _"19.7% below the 30-day average (£99.67)"_,
+_"Lowest price recorded"_. New deals are created as `PENDING_REVIEW` by the jobs stage.
 
 ### Deal workflow (state machine)
 
-```
-DETECTED → PENDING_REVIEW → APPROVED → PUBLISHED → EXPIRED
-                  │             │           │
-                  └→ REJECTED   └→ REJECTED └→ REMOVED
-```
+**Implemented in Stage 5** (`src/server/deals/workflow.ts`). One table defines every
+transition, who may make it (`system` = jobs/engine, `editor` = EDITOR/ADMIN) and which
+timestamp it sets; anything else is refused with `INVALID_TRANSITION` or `NOT_PERMITTED`.
 
-Transitions are defined in one table in `workflow.ts`; any other transition is refused.
+| Action    | From                                          | To             | Actors         | Sets          |
+| --------- | --------------------------------------------- | -------------- | -------------- | ------------- |
+| `submit`  | DETECTED                                      | PENDING_REVIEW | system, editor | —             |
+| `approve` | PENDING_REVIEW                                | APPROVED       | editor         | `reviewedAt`  |
+| `reject`  | DETECTED, PENDING_REVIEW, APPROVED            | REJECTED       | editor         | `reviewedAt`  |
+| `publish` | APPROVED                                      | PUBLISHED      | editor         | `publishedAt` |
+| `expire`  | DETECTED, PENDING_REVIEW, APPROVED, PUBLISHED | EXPIRED        | system, editor | `expiredAt`   |
+| `remove`  | APPROVED, PUBLISHED, EXPIRED                  | REMOVED        | editor         | —             |
+
+Active statuses (DETECTED, PENDING_REVIEW, APPROVED, PUBLISHED) are editable and are the
+ones covered by the one-active-deal-per-variant index — an integration test checks the two
+lists match. Only PUBLISHED deals appear on the public site.
 
 ---
 
 ## 8. Background-job architecture
 
+**Implemented in Stage 7** (`src/server/jobs/`, `src/server/services/deals/`,
+`src/app/api/cron/[job]/route.ts`, `vercel.json`). Alert and notification jobs come with the
+alerts stage.
+
 ### Mechanism
 
-- **Scheduler:** Vercel Cron hits `/api/cron/*` route handlers, authenticated with
-  `Authorization: Bearer ${CRON_SECRET}`.
-- **Handlers are thin:** they call a job function in `src/server/jobs/` which calls
-  services. The same job functions can be run from a CLI script (`npm run job:x`)
-  locally and in tests.
-- **Chunking & resumability:** each run processes a bounded batch within the function
-  time limit and stores its `cursor` on `ImportRun`; the next invocation resumes.
-- **Idempotency:** upserts keyed by `(retailerId, externalId)`; notifications keyed
-  by `dedupeKey`; deal creation guarded by partial unique index.
-- **Concurrency:** Postgres advisory lock per `(job, retailerId)` so overlapping
-  cron invocations can't double-process.
-- **Observability:** `ImportRun` rows + structured logs; admin "Imports" page shows
-  run history and error samples.
-- **Scale path:** if volumes outgrow cron + chunking, swap the trigger layer for a
-  durable queue (Inngest or Upstash QStash) **without changing job functions**.
+- **Trigger:** Vercel Cron calls `GET /api/cron/<job>` with `Authorization: Bearer $CRON_SECRET`.
+  The token is compared in constant time (both sides SHA-256 hashed). No secret configured →
+  `503`; wrong or missing token → `401` (before revealing whether the job exists); unknown
+  job → `404`. Responses are `no-store`; `maxDuration` is 60s.
+- **Thin handlers:** the route calls `runScheduledJob(name)`; the same function backs
+  `npm run job -- <name>` locally and the integration tests.
+- **Mutual exclusion:** a `JobLock` table row per job with a lease (`INSERT … ON CONFLICT …
+WHERE lockedUntil <= now`), atomic across instances and safe behind connection poolers
+  (session advisory locks are not). A crashed run's lease expires (10–15 min); an overlapping
+  run returns `{ status: "skipped" }`.
+- **Bounded batches:** catalogue imports process at most 20 pages × 100 items per retailer per
+  run and resume from the last `ImportRun.cursor`; price refresh re-prices at most 200
+  listings per retailer per run.
+- **Isolation:** one retailer's failure (bad adapter key, feed down) is reported and the others
+  continue; one product's detection failure is counted and logged.
+- **Idempotency:** upserts by `(retailerId, externalId)`; write-on-change price history; the
+  one-active-deal-per-variant index (a concurrent duplicate insert counts as "unchanged").
 
-### Pipeline
+### Jobs
 
-| Job                   | Schedule (initial)                                | What it does                                                                                                                                                                            |
-| --------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Catalogue import      | daily per retailer                                | `adapter.fetchCatalogue` pages → ingestion (upsert products/variants, category mapping, affiliate links, price observation). Marks products not seen for N days inactive                |
-| Price refresh         | every 1–6h (per retailer config / API quota)      | `adapter.fetchPrices` for active products, prioritising products with active deals, alerts or high traffic → PriceHistory on change → recompute snapshot                                |
-| Deal detection        | after each price refresh (chained) + hourly sweep | For variants whose price changed: pricing engine → deal engine → create `PENDING_REVIEW` deal or update an existing active one                                                          |
-| Deal expiry           | every 15–30 min                                   | Expire published deals when price rises above deal price by > tolerance, item goes out of stock, `expiresAt` passes, or price not re-verified within X hours. Revalidate affected pages |
-| Alert matching        | after deal detection / price refresh              | For changed products, find active alerts where filters match and `current ≤ maxPrice` → create `Notification(PENDING)` with dedupe key                                                  |
-| Notification delivery | every 5 min                                       | Send PENDING notifications through `Notifier` with retries/backoff; mark SENT/FAILED                                                                                                    |
-| Analytics rollup      | nightly                                           | Aggregate clicks per deal/retailer/day; flag bot traffic                                                                                                                                |
+| Job                | Schedule (`vercel.json`, UTC) | What it does                                                                                                                                                                                                         |
+| ------------------ | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `import-catalogue` | daily 04:17                   | Per active retailer: import (or resume) the catalogue. After a **complete** pass, mark listings not seen for 3 days inactive. Then run deal detection on everything just priced.                                     |
+| `refresh-prices`   | every 3 h at :07              | Per active retailer with price lookup: re-price listings with active deals first, then the least recently priced. Then run deal detection on them.                                                                   |
+| `detect-deals`     | hourly at :37                 | Deal detection for listings priced in the last 26 h (safety net if a chained run was missed).                                                                                                                        |
+| `expire-deals`     | hourly at :47                 | Re-check every active deal: expire it if the product was delisted, its `expiresAt` passed, its price hasn't been re-checked for 48 h, it no longer passes the deal engine, or its variant stopped being the default. |
+
+Because detection is chained after imports and refreshes, the pipeline still works on a
+hosting plan that only allows daily cron jobs — deals would just be detected and expired
+less promptly. **Check your Vercel plan's cron limits before deploying**; some plans reject
+schedules that run more than once a day.
+
+### Deal detection (`deal-detection.service.ts`)
+
+For each listing's default variant: load a year of price history → `computePriceStats` →
+`evaluateDeal`, then reconcile with the variant's active deal (if any):
+
+| Engine says | No active deal                                           | Active deal exists                                                                                    |
+| ----------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| deal        | create as `PENDING_REVIEW` (via the workflow's `submit`) | if the **deal price** changed, refresh its snapshot; otherwise leave the detection-time numbers alone |
+| not a deal  | nothing                                                  | expire it (system actor, via the workflow)                                                            |
+
+`expire-deals` uses the same reconciliation but never creates deals and tolerates 48 h (not
+24 h) since the last price check. Every create, update and expiry writes an `AuditLog` row
+with a null actor and the reason. New deals get the product title and the engine's first
+reason as summary; the slug is the title plus a short hash.
 
 ---
 
 ## 9. Authentication & authorisation
 
-- **Auth.js (NextAuth v5)** with the Prisma adapter, database sessions.
-  - Users: email magic link (passwordless; no password storage to secure).
-  - Admins: same, plus optional Google/GitHub OAuth; admin accounts restricted
-    to an allow-list via `ADMIN_EMAILS` for bootstrap.
-- **Roles:** `USER`, `EDITOR` (review/publish deals), `ADMIN` (everything incl.
-  retailers, users).
+**Implemented in Stage 8** (`src/server/auth/`, `src/app/(auth)/`, `src/app/admin/layout.tsx`,
+`src/proxy.ts`, `next.config.ts`, `src/server/rate-limit/`).
+
+**Library: Better Auth 1.7** (decided in Stage 8, replacing the originally proposed Auth.js:
+Auth.js v5 never left beta and the project joined Better Auth). Data stays in our Postgres
+through Better Auth's Prisma adapter; the `User`/`Session`/`Account`/`Verification`/`RateLimit`
+tables follow its core schema (migration `…_better_auth`).
+
+- **Sign-in:** email + password (12–128 characters, hashed by Better Auth). Sessions last 30
+  days and are stored in the database. Other methods (Google, magic links) can be added as
+  Better Auth plugins/providers once their credentials or an email provider exist; email
+  verification waits for the email provider.
+- **Roles:** `USER` < `EDITOR` (review/publish deals) < `ADMIN` (also retailers and users),
+  stored on `User.role`. Declared to Better Auth with `input: false`, so a sign-up request can
+  never set it. **The first admin is created with `npm run user:role -- <email> ADMIN`**, which
+  needs direct database access and writes an audit-log entry. (An email allow-list was
+  rejected: without email verification anyone could register an allow-listed address.)
 - **Enforcement in depth:**
-  1. `proxy.ts` (Next 16's renamed middleware) redirects unauthenticated requests away from `/admin` (fast
-     path only — not trusted alone).
-  2. `admin/layout.tsx` calls `requireRole()` server-side.
-  3. **Every** Server Action / Route Handler calls `requireRole()` / ownership check
-     itself (actions are public endpoints).
-- Alerts require an account (verified email) — needed for UK GDPR consent and to
-  stop alerts being used to spam third parties.
-- Other security measures: Zod validation everywhere; Prisma parameterised queries
-  (raw SQL only via tagged `Prisma.sql`); CSP, HSTS, `X-Frame-Options`, `Referrer-Policy`
-  headers; Server Actions' built-in origin check; secrets only in Vercel env vars,
-  validated at boot by `env.ts`; `RateLimiter` interface (in-memory for dev,
-  Upstash Redis in prod) on `/go`, auth, alert creation, search; outbound redirect
-  URLs checked against the retailer's domain allow-list (no open redirect);
-  sanitise any HTML from feeds (render descriptions as text).
+  1. `src/proxy.ts` (Next 16's renamed middleware) redirects requests to `/admin` without a
+     session cookie to `/sign-in?next=…`. Fast path only — it never grants access.
+  2. `admin/layout.tsx` calls `requireRole("EDITOR")`: signed-out → sign in; signed in without
+     the role → **404**, so the admin area's existence isn't revealed.
+  3. Every future Server Action and Route Handler calls `requireRole()` itself.
+- **CSRF / origin:** Better Auth's origin check is forced on (`disableOriginCheck: false`); by
+  default it would switch itself off whenever `NODE_ENV=test` or `TEST` is set. Cookies are
+  `HttpOnly`, `SameSite=Lax`, and `Secure` in production. Server Actions have Next.js's own
+  origin check.
+- **Redirects:** `?next=` targets pass through `safeRedirectPath`, which only allows same-site
+  paths (and resolves the URL, because the parser strips tabs/newlines: `"/\t/evil.example"`).
+- **Account enumeration:** a wrong password and an unknown email return the same message.
+- **Rate limiting:** Better Auth's limiter uses the shared `RateLimit` table (works across
+  serverless instances): sign-in 5/minute and sign-up 5/hour per IP, 100/minute otherwise.
+  On in production, and exercised by an integration test. For our own endpoints,
+  `RateLimiter` (`src/server/rate-limit/`) is the interface; the in-memory implementation
+  suits development and single instances, and a shared-store implementation will back
+  `/go` and alerts in their stages.
+- **Security headers** (`src/lib/security-headers.ts`, applied in `next.config.ts`): CSP
+  (`default-src 'self'`, `frame-ancestors 'none'`, `object-src 'none'`, `base-uri`/`form-action
+'self'`; inline scripts allowed because Next.js inlines its bootstrap — a nonce-based CSP
+  can replace this later), `X-Content-Type-Options`, `X-Frame-Options: DENY`,
+  `Referrer-Policy`, `Permissions-Policy`, and HSTS in production. `X-Powered-By` is off.
+- **Secrets:** `BETTER_AUTH_SECRET` (≥ 32 characters) is required in production; development
+  and tests fall back to a fixed development-only value.
 
 ---
 
 ## 10. Affiliate tracking architecture
+
+**Implemented in Stage 11** (`src/server/affiliate/` pure helpers, `src/server/services/affiliate/`,
+`src/app/go/[code]/route.ts`, `src/app/robots.ts`, `src/app/admin/clicks/`).
 
 ```
 DealCard / Deal page ──► <OutboundLink code="k3f9a2">  (renders href="/go/k3f9a2", rel="sponsored nofollow")
@@ -964,6 +1122,32 @@ DealCard / Deal page ──► <OutboundLink code="k3f9a2">  (renders href="/go/
 - **Single source of truth:** `AffiliateLink` rows are created by the ingestion
   service using `adapter.buildAffiliateUrl()`. UI components never see retailer or
   affiliate URLs — only link codes.
+- **One link per product.** Each catalogue import calls `syncProductLink` in the same
+  transaction as the product upsert: it builds the URL with the retailer's adapter, rejects
+  anything not https on the adapter's `allowedHosts`, then creates the link or updates its
+  destination. The **code never changes**, so links already on pages keep working. Codes
+  are 10 random base-62 characters. The database enforces https, the code format and at
+  most one product-level link per product (partial unique index). Products imported before
+  Stage 11 get their link on the retailer's next catalogue import.
+- **Deal attribution:** the deal page links to `/go/<code>?p=deal-page&deal=<slug>`. The click
+  records that deal only if the slug belongs to the link's product, and `p` only if it is a
+  known placement (`src/lib/outbound.ts`). Otherwise both are stored as null.
+- **Redirect checks, in order:** per-IP rate limit (60/minute; over the limit returns 429
+  without touching the database), code format, link active, product active, retailer
+  `ACTIVE`, destination still on the adapter's allowed hosts. Any failure is a 404 with no
+  `Location`. Responses are `Cache-Control: no-store` and `X-Robots-Tag: noindex, nofollow`.
+  `HEAD` gets the same answer but records nothing (link checkers and unfurlers).
+- **Recording** happens in `after()`, i.e. once the redirect has been sent, and errors are
+  logged and swallowed. The button is a plain `<a>`, not `next/link`, so prefetching can
+  never count as a click.
+- **Rate limiter is per instance** (in memory). On serverless each instance counts on its
+  own, so the effective limit is looser. A shared store is Stage 15 hardening work. If a
+  request carries no client IP header, all such requests share one bucket.
+- **What a click stores:** `ipHash` is an HMAC-SHA256 of the IP keyed with the UTC day and
+  `BETTER_AUTH_SECRET` (domain-separated), so it rotates daily and can't be reversed or
+  linked across days. The user agent is capped at 512 characters, and the referrer is cut
+  to origin + path (query strings can carry personal data). `isBot` comes from user-agent
+  heuristics, including no user agent. `userId` is not recorded yet.
 - Unknown/inactive code → 404 (no redirect), so the endpoint can't be abused as an
   open redirect.
 - Click recording must never block or break the redirect: failures are logged and
@@ -971,7 +1155,8 @@ DealCard / Deal page ──► <OutboundLink code="k3f9a2">  (renders href="/go/
 - `/go/*` is disallowed in `robots.txt`; links are `rel="sponsored nofollow noopener"`.
 - Every page with outbound links shows a clear affiliate disclosure (ASA/CAP, CMA).
 - Privacy: no raw IPs; salted hash with rotating salt; bot clicks flagged and
-  excluded from reporting; cookie consent before any non-essential tracking.
+  excluded from reporting; `/go` sets no cookies. Cookie consent is needed before any
+  non-essential tracking is added.
 
 ---
 
@@ -1033,7 +1218,7 @@ Each stage ends with passing tests and a summary; no stage starts without instru
 | 5   | Deal engine            | Pure rules/scoring/config + workflow state machine, unit tests                                                                          |
 | 6   | Retailer adapters      | Interface, Zod schemas, registry, contract test kit, `MockRetailerAdapter`, ingestion service                                           |
 | 7   | Background jobs        | Cron route handlers, job runner, locks, `ImportRun`, deal detection + expiry jobs                                                       |
-| 8   | Auth & roles           | Auth.js, roles, guards, proxy, security headers, rate-limiter interface                                                                 |
+| 8   | Auth & roles           | Better Auth, roles, guards, proxy, security headers, rate-limiter interface                                                             |
 | 9   | Admin dashboard        | Overview, deal review workflow, products + price-history inspector, retailers, categories, users, audit log                             |
 | 10  | Public website         | Home, deals list, deal page (with chart), category & retailer pages, design system, affiliate disclosure                                |
 | 11  | Affiliate & clicks     | `AffiliateLink`, `/go/[code]`, click recording, admin clicks view                                                                       |
@@ -1065,7 +1250,7 @@ Each stage ends with passing tests and a summary; no stage starts without instru
    `ProductGroup` matched by GTIN/brand+model — deferred, schema leaves room (`gtin`).
 5. **Serverless limits.** Large feed imports can exceed Vercel function duration;
    mitigated by chunking/cursors, with Inngest/QStash as the upgrade path.
-6. **Auth provider.** Proposed Auth.js (no vendor lock-in, data in our DB). Clerk
+6. **Auth provider — resolved in Stage 8:** Better Auth (see §9). Originally: proposed Auth.js (no vendor lock-in, data in our DB). Clerk
    would be faster to ship but adds cost/vendor dependency. Needs your preference.
 7. **Email provider** for alerts (Resend, Postmark, SES…) — not chosen; hidden
    behind a `Notifier` interface.

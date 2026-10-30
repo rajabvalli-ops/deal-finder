@@ -29,6 +29,10 @@ export default defineConfig({
         url: `${baseURL}/api/health`,
         reuseExistingServer: !process.env.CI,
         timeout: 180_000,
-        env: { NEXT_PUBLIC_SITE_URL: baseURL },
+        env: {
+          NEXT_PUBLIC_SITE_URL: baseURL,
+          BETTER_AUTH_SECRET:
+            process.env.BETTER_AUTH_SECRET ?? "e2e-only-auth-secret-0123456789abcdef",
+        },
       },
 });

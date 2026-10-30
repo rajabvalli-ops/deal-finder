@@ -116,4 +116,12 @@ structured data, clean SEO-friendly URLs.
 | ----- | ----------------------------------------- | ----------- |
 | 1     | Architecture & PRODUCT.md                 | ✅ Done     |
 | 2     | Project scaffold                          | ✅ Done     |
-| 3+    | See roadmap in `docs/ARCHITECTURE.md` §13 | Not started |
+| 3     | Database                                  | ✅ Done     |
+| 4     | Pricing engine                            | ✅ Done     |
+| 5     | Deal engine & workflow                    | ✅ Done     |
+| 6     | Retailer adapters & ingestion             | ✅ Done     |
+| 7     | Background jobs & deal detection          | ✅ Done     |
+| 8     | Authentication & roles                    | ✅ Done     |
+| 9     | Admin dashboard                           | ✅ Done     |
+| 10    | Public website                            | ✅ Done     |
+| 11+   | See roadmap in `docs/ARCHITECTURE.md` §13 | Not started |

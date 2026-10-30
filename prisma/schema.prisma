@@ -1,0 +1,600 @@
+// Database schema. Design notes: docs/ARCHITECTURE.md §2–3.
+// Conventions:
+//   - Money is integer minor units (pence) + ISO 4217 currency code. Never floats.
+//   - Percentages are basis points (1% = 100 bps).
+//   - All timestamps are timestamptz.
+//   - Extra integrity rules (CHECK constraints, partial unique index) live in the migration SQL.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ───────────── Enums ─────────────
+
+enum Role {
+  USER
+  EDITOR
+  ADMIN
+}
+
+enum Availability {
+  IN_STOCK
+  LOW_STOCK
+  OUT_OF_STOCK
+  PREORDER
+  DISCONTINUED
+  UNKNOWN
+}
+
+enum DealStatus {
+  DETECTED
+  PENDING_REVIEW
+  APPROVED
+  PUBLISHED
+  REJECTED
+  EXPIRED
+  REMOVED
+}
+
+enum DealSource {
+  ENGINE
+  MANUAL
+}
+
+enum ReferencePriceType {
+  PREVIOUS
+  AVG_30
+  AVG_90
+}
+
+enum RetailerStatus {
+  ACTIVE
+  PAUSED
+  DISABLED
+}
+
+enum IntegrationType {
+  MOCK
+  AFFILIATE_FEED
+  RETAILER_API
+  MERCHANT_FEED
+  MANUAL
+}
+
+enum TagSource {
+  MANUAL
+  RULE
+  AI
+}
+
+enum NotificationChannel {
+  EMAIL
+  IN_APP
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+enum ImportJobType {
+  CATALOGUE_IMPORT
+  PRICE_REFRESH
+}
+
+enum ImportRunStatus {
+  RUNNING
+  SUCCEEDED
+  PARTIAL
+  FAILED
+}
+
+// ───────────── Users & auth (Better Auth) ─────────────
+// User, Session, Account, Verification and RateLimit follow Better Auth's core schema
+// (better-auth 1.7). `role` is our own field; Better Auth never lets sign-up set it.
+
+model User {
+  id            String   @id @default(cuid())
+  name          String   @default("")
+  email         String   @unique
+  emailVerified Boolean  @default(false)
+  image         String?
+  role          Role     @default(USER)
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @db.Timestamptz(3)
+
+  accounts      Account[]
+  sessions      Session[]
+  alerts        Alert[]
+  notifications Notification[]
+  clicks        Click[]
+  reviewedDeals Deal[]         @relation("DealReviewer")
+  auditLogs     AuditLog[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  expiresAt DateTime @db.Timestamptz(3)
+  ipAddress String?
+  userAgent String?
+  userId    String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// A sign-in method for a user: "credential" (password hash) or an OAuth provider.
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  /// Password hash for providerId "credential". Never exposed outside the auth module.
+  password              String?
+  accessToken           String?   @db.Text
+  refreshToken          String?   @db.Text
+  idToken               String?   @db.Text
+  accessTokenExpiresAt  DateTime? @db.Timestamptz(3)
+  refreshTokenExpiresAt DateTime? @db.Timestamptz(3)
+  scope                 String?
+  createdAt             DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime  @updatedAt @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+}
+
+/// Short-lived tokens (email verification, password reset, magic links).
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime @db.Timestamptz(3)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([identifier])
+}
+
+/// Better Auth's shared rate-limit counters (works across serverless instances).
+model RateLimit {
+  id          String @id @default(cuid())
+  key         String @unique
+  count       Int
+  lastRequest BigInt
+}
+
+// ───────────── Catalogue ─────────────
+
+model Retailer {
+  id              String          @id @default(cuid())
+  slug            String          @unique
+  name            String
+  websiteUrl      String
+  logoUrl         String?
+  description     String?
+  status          RetailerStatus  @default(ACTIVE)
+  /// Selects the RetailerAdapter implementation, e.g. "mock".
+  adapterKey      String
+  integrationType IntegrationType
+  /// Non-secret adapter configuration only. Secrets live in environment variables.
+  adapterConfig   Json?
+  /// 0–100, set by admins; an input to the deal engine.
+  trustScore      Int             @default(50)
+  deliveryInfo    String?
+  createdAt       DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime        @updatedAt @db.Timestamptz(3)
+
+  products       Product[]
+  deals          Deal[]
+  coupons        Coupon[]
+  affiliateLinks AffiliateLink[]
+  alerts         Alert[]
+  importRuns     ImportRun[]
+
+  @@index([status])
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  name        String
+  description String?
+  parentId    String?
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children Category[] @relation("CategoryTree")
+  products Product[]
+  alerts   Alert[]
+
+  @@index([parentId])
+}
+
+/// One retailer's listing of an item, unique by (retailerId, externalId).
+model Product {
+  id           String       @id @default(cuid())
+  retailerId   String
+  /// The retailer's own identifier (SKU, ASIN, feed ID…).
+  externalId   String
+  slug         String       @unique
+  title        String
+  brand        String?
+  model        String?
+  /// EAN/UPC barcode — reserved for future cross-retailer matching.
+  gtin         String?
+  description  String?      @db.Text
+  imageUrl     String?
+  /// Retailer product page. Never linked to directly — outbound links go through AffiliateLink.
+  productUrl   String
+  categoryId   String?
+  currency     String       @default("GBP") @db.Char(3)
+  availability Availability @default(UNKNOWN)
+  rating       Decimal?     @db.Decimal(3, 2)
+  reviewCount  Int?
+  isActive     Boolean      @default(true)
+
+  // Cached pricing snapshot for the default variant (pricing engine output).
+  // Source of truth is PriceHistory.
+  currentPrice   Int?
+  previousPrice  Int?
+  lowestPrice    Int?
+  highestPrice   Int?
+  avg7Price      Int?
+  avg30Price     Int?
+  avg90Price     Int?
+  priceUpdatedAt DateTime? @db.Timestamptz(3)
+
+  /// Last time an import returned this product.
+  lastSeenAt DateTime? @db.Timestamptz(3)
+  createdAt  DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime  @updatedAt @db.Timestamptz(3)
+
+  retailer       Retailer         @relation(fields: [retailerId], references: [id], onDelete: Restrict)
+  category       Category?        @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  variants       ProductVariant[]
+  priceHistory   PriceHistory[]
+  deals          Deal[]
+  tags           ProductTag[]
+  affiliateLinks AffiliateLink[]
+  alerts         Alert[]
+  clicks         Click[]
+
+  @@unique([retailerId, externalId])
+  @@index([categoryId])
+  @@index([brand, model])
+  @@index([gtin])
+  @@index([isActive, retailerId])
+}
+
+/// Purchasable option of a listing (colour, size…). Every product has exactly one default variant.
+model ProductVariant {
+  id           String       @id @default(cuid())
+  productId    String
+  externalId   String
+  /// e.g. "Default", "Black / 256GB"
+  name         String
+  /// e.g. { "colour": "Black", "storage": "256GB" }
+  attributes   Json?
+  isDefault    Boolean      @default(false)
+  currentPrice Int?
+  availability Availability @default(UNKNOWN)
+  createdAt    DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime     @updatedAt @db.Timestamptz(3)
+
+  product      Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  priceHistory PriceHistory[]
+  deals        Deal[]
+
+  @@unique([productId, externalId])
+}
+
+/// Append-only price observations. Written on change, plus a daily heartbeat.
+model PriceHistory {
+  id           String       @id @default(cuid())
+  /// Denormalised from the variant for fast per-product queries.
+  productId    String
+  variantId    String
+  price        Int
+  currency     String       @db.Char(3)
+  availability Availability
+  observedAt   DateTime     @db.Timestamptz(3)
+  importRunId  String?
+
+  product   Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  importRun ImportRun?     @relation(fields: [importRunId], references: [id], onDelete: SetNull)
+
+  @@index([variantId, observedAt])
+  @@index([productId, observedAt])
+}
+
+// ───────────── Deals ─────────────
+
+/// A time-bounded editorial event about a variant at a price. Snapshots the numbers at detection.
+model Deal {
+  id         String     @id @default(cuid())
+  slug       String     @unique
+  productId  String
+  variantId  String
+  /// Denormalised from the product for fast retailer-page queries.
+  retailerId String
+  status     DealStatus @default(DETECTED)
+  source     DealSource @default(ENGINE)
+
+  title       String
+  summary     String?
+  description String? @db.Text
+  imageUrl    String?
+  isFeatured  Boolean @default(false)
+
+  // Snapshot at detection — explains the deal even after prices move.
+  dealPrice      Int
+  referencePrice Int
+  referenceType  ReferencePriceType
+  savingAmount   Int
+  discountBps    Int
+  historicalLow  Int?
+  avg30Price     Int?
+  avg90Price     Int?
+  /// Deterministic 0–100 score.
+  score          Int
+  /// Per-rule contributions and human-readable reasons.
+  scoreBreakdown Json
+  /// e.g. "deal-engine@1"
+  engineVersion  String
+
+  detectedAt      DateTime  @default(now()) @db.Timestamptz(3)
+  reviewedAt      DateTime? @db.Timestamptz(3)
+  reviewedById    String?
+  rejectionReason String?
+  publishedAt     DateTime? @db.Timestamptz(3)
+  expiresAt       DateTime? @db.Timestamptz(3)
+  expiredAt       DateTime? @db.Timestamptz(3)
+  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime  @updatedAt @db.Timestamptz(3)
+
+  product        Product         @relation(fields: [productId], references: [id], onDelete: Restrict)
+  variant        ProductVariant  @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  retailer       Retailer        @relation(fields: [retailerId], references: [id], onDelete: Restrict)
+  reviewedBy     User?           @relation("DealReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  tags           DealTag[]
+  coupons        Coupon[]
+  affiliateLinks AffiliateLink[]
+  clicks         Click[]
+  notifications  Notification[]
+
+  @@index([status, publishedAt])
+  @@index([retailerId, status])
+  @@index([productId, status])
+  @@index([variantId])
+}
+
+model Coupon {
+  id          String    @id @default(cuid())
+  retailerId  String
+  dealId      String?
+  /// Null for offers that need no code.
+  code        String?
+  title       String
+  description String?
+  terms       String?   @db.Text
+  validFrom   DateTime? @db.Timestamptz(3)
+  validUntil  DateTime? @db.Timestamptz(3)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
+
+  retailer Retailer @relation(fields: [retailerId], references: [id], onDelete: Cascade)
+  deal     Deal?    @relation(fields: [dealId], references: [id], onDelete: SetNull)
+
+  @@index([retailerId, isActive])
+  @@index([dealId])
+}
+
+// ───────────── Tags ─────────────
+
+model Tag {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  products ProductTag[]
+  deals    DealTag[]
+}
+
+model ProductTag {
+  productId String
+  tagId     String
+  source    TagSource @default(MANUAL)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([productId, tagId])
+  @@index([tagId])
+}
+
+model DealTag {
+  dealId    String
+  tagId     String
+  source    TagSource @default(MANUAL)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+
+  deal Deal @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([dealId, tagId])
+  @@index([tagId])
+}
+
+// ───────────── Affiliate & clicks ─────────────
+
+/// The only place outbound retailer URLs are stored. Public links use /go/[code].
+/// Ingestion keeps one product-level link (dealId null) per product (partial unique index).
+model AffiliateLink {
+  id             String   @id @default(cuid())
+  /// Short opaque identifier used in /go/[code].
+  code           String   @unique
+  retailerId     String
+  productId      String?
+  dealId         String?
+  /// Fully-built outbound URL, validated against the retailer's domain allow-list.
+  destinationUrl String
+  /// e.g. "awin", "direct", "mock"
+  network        String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+
+  retailer Retailer @relation(fields: [retailerId], references: [id], onDelete: Restrict)
+  product  Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  deal     Deal?    @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  clicks   Click[]
+
+  @@index([retailerId])
+  @@index([productId])
+  @@index([dealId])
+}
+
+model Click {
+  id              String   @id @default(cuid())
+  affiliateLinkId String
+  dealId          String?
+  productId       String?
+  userId          String?
+  /// Salted hash — raw IP addresses are never stored.
+  ipHash          String?
+  userAgent       String?
+  referrer        String?
+  /// e.g. "deal-page-cta", "listing-card"
+  placement       String?
+  isBot           Boolean  @default(false)
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+
+  affiliateLink AffiliateLink @relation(fields: [affiliateLinkId], references: [id], onDelete: Cascade)
+  deal          Deal?         @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  product       Product?      @relation(fields: [productId], references: [id], onDelete: SetNull)
+  user          User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([dealId, createdAt])
+  @@index([affiliateLinkId, createdAt])
+}
+
+// ───────────── Alerts & notifications ─────────────
+
+/// A user's price alert. At least one of keyword/productId/categoryId is required (CHECK constraint).
+model Alert {
+  id              String    @id @default(cuid())
+  userId          String
+  keyword         String?
+  productId       String?
+  categoryId      String?
+  retailerId      String?
+  maxPrice        Int?
+  minDiscountBps  Int?
+  isActive        Boolean   @default(true)
+  lastTriggeredAt DateTime? @db.Timestamptz(3)
+  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime  @updatedAt @db.Timestamptz(3)
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product       Product?       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  category      Category?      @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  retailer      Retailer?      @relation(fields: [retailerId], references: [id], onDelete: Cascade)
+  notifications Notification[]
+
+  @@index([userId])
+  @@index([isActive, productId])
+  @@index([isActive, categoryId])
+}
+
+model Notification {
+  id        String              @id @default(cuid())
+  userId    String
+  alertId   String?
+  dealId    String?
+  channel   NotificationChannel
+  status    NotificationStatus  @default(PENDING)
+  subject   String
+  body      String              @db.Text
+  /// Prevents duplicate notifications, e.g. "<alertId>:<dealId>".
+  dedupeKey String              @unique
+  attempts  Int                 @default(0)
+  lastError String?
+  sentAt    DateTime?           @db.Timestamptz(3)
+  readAt    DateTime?           @db.Timestamptz(3)
+  createdAt DateTime            @default(now()) @db.Timestamptz(3)
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  alert Alert? @relation(fields: [alertId], references: [id], onDelete: SetNull)
+  deal  Deal?  @relation(fields: [dealId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([userId, createdAt])
+}
+
+// ───────────── Operations ─────────────
+
+model ImportRun {
+  id            String          @id @default(cuid())
+  retailerId    String
+  jobType       ImportJobType
+  status        ImportRunStatus @default(RUNNING)
+  /// Resume point for chunked imports.
+  cursor        String?
+  itemsSeen     Int             @default(0)
+  itemsUpserted Int             @default(0)
+  itemsFailed   Int             @default(0)
+  errorSample   Json?
+  startedAt     DateTime        @default(now()) @db.Timestamptz(3)
+  finishedAt    DateTime?       @db.Timestamptz(3)
+
+  retailer     Retailer       @relation(fields: [retailerId], references: [id], onDelete: Cascade)
+  priceHistory PriceHistory[]
+
+  @@index([retailerId, startedAt])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  /// e.g. "deal.approve"
+  action     String
+  entityType String
+  entityId   String
+  diff       Json?
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+/// Lease-based mutual exclusion for background jobs. Works through connection poolers,
+/// unlike session-level advisory locks; an expired lease can be taken over after a crash.
+model JobLock {
+  name        String   @id
+  owner       String
+  lockedUntil DateTime @db.Timestamptz(3)
+  acquiredAt  DateTime @db.Timestamptz(3)
+}
