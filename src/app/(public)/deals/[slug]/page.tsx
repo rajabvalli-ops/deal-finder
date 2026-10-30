@@ -112,6 +112,15 @@ export default async function DealPage({ params }: Props) {
             </p>
           )}
 
+          <p className="text-sm">
+            <Link
+              href={`/alerts?deal=${encodeURIComponent(deal.slug)}`}
+              className="font-medium text-brand-600 hover:underline"
+            >
+              Get a price alert for this product
+            </Link>
+          </p>
+
           <AffiliateDisclosure />
         </div>
       </div>

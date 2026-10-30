@@ -7,13 +7,15 @@ UK deal discovery and price-intelligence platform (working name).
 
 ## Status
 
-Stage 12 (search). Built so far: schema and migrations, repositories, the deterministic
+Stage 13 (alerts). Built so far: schema and migrations, repositories, the deterministic
 pricing and deal engines, the deal workflow, the retailer adapter framework with
 `MockRetailerAdapter`, ingestion, deal detection/expiry and scheduled jobs, email + password
 sign-in with roles, the admin dashboard, the public site (home, deals, deal pages with price
 history, categories, retailers), outbound links through `/go/[code]` with click recording,
 and search (`/search`: typo-tolerant keyword search with category, retailer, price, discount
-and stock filters). Alerts come next. There is no real retailer yet: mock links point at the
+and stock filters), and price alerts (`/alerts`: signed-in users watch a keyword, category or
+product, with price and discount limits, and get in-app notifications when a matching deal is
+published). Email notifications wait for an email provider. There is no real retailer yet: mock links point at the
 fictional `mock-retailer.invalid`, which does not resolve.
 
 ## Requirements
@@ -45,26 +47,26 @@ No Docker? Any PostgreSQL 16 works — create the two databases and set the URLs
 
 ## Scripts
 
-| Command                               | What it does                                                                                   |
-| ------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `npm run dev`                         | Start the dev server                                                                           |
-| `npm run build`                       | Production build (needs `NEXT_PUBLIC_SITE_URL`, `BETTER_AUTH_SECRET`)                          |
-| `npm run start`                       | Serve the production build                                                                     |
-| `npm run lint`                        | ESLint, including architecture module-boundary rules                                           |
-| `npm run typecheck`                   | TypeScript (strict)                                                                            |
-| `npm run format`                      | Format with Prettier (`format:check` to verify only)                                           |
-| `npm test`                            | Vitest unit tests                                                                              |
-| `npm run test:coverage`               | Unit tests with coverage (100% required for engines, workflow, adapters and pure helpers)      |
-| `npm run test:integration`            | Integration tests against `TEST_DATABASE_URL` (a real PostgreSQL database)                     |
-| `npm run test:e2e`                    | Playwright tests (builds and serves on port 3100 against `DATABASE_URL`)                       |
-| `npm run check`                       | lint + typecheck + format check + unit tests                                                   |
-| `npm run db:migrate`                  | Create/apply migrations in development                                                         |
-| `npm run db:deploy`                   | Apply pending migrations (CI / production)                                                     |
-| `npm run db:seed`                     | Seed reference data (idempotent)                                                               |
-| `npm run db:studio`                   | Browse the database with Prisma Studio                                                         |
-| `npm run import`                      | Run a catalogue import (`--retailer <slug>`, `--backfill-days <n>` for the mock adapter)       |
-| `npm run job -- <name>`               | Run a background job now: `import-catalogue`, `refresh-prices`, `detect-deals`, `expire-deals` |
-| `npm run user:role -- <email> <role>` | Set an account's role (`USER`, `EDITOR`, `ADMIN`) — the only way to create an admin            |
+| Command                               | What it does                                                                                                     |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `npm run dev`                         | Start the dev server                                                                                             |
+| `npm run build`                       | Production build (needs `NEXT_PUBLIC_SITE_URL`, `BETTER_AUTH_SECRET`)                                            |
+| `npm run start`                       | Serve the production build                                                                                       |
+| `npm run lint`                        | ESLint, including architecture module-boundary rules                                                             |
+| `npm run typecheck`                   | TypeScript (strict)                                                                                              |
+| `npm run format`                      | Format with Prettier (`format:check` to verify only)                                                             |
+| `npm test`                            | Vitest unit tests                                                                                                |
+| `npm run test:coverage`               | Unit tests with coverage (100% required for engines, workflow, adapters and pure helpers)                        |
+| `npm run test:integration`            | Integration tests against `TEST_DATABASE_URL` (a real PostgreSQL database)                                       |
+| `npm run test:e2e`                    | Playwright tests (builds and serves on port 3100 against `DATABASE_URL`)                                         |
+| `npm run check`                       | lint + typecheck + format check + unit tests                                                                     |
+| `npm run db:migrate`                  | Create/apply migrations in development                                                                           |
+| `npm run db:deploy`                   | Apply pending migrations (CI / production)                                                                       |
+| `npm run db:seed`                     | Seed reference data (idempotent)                                                                                 |
+| `npm run db:studio`                   | Browse the database with Prisma Studio                                                                           |
+| `npm run import`                      | Run a catalogue import (`--retailer <slug>`, `--backfill-days <n>` for the mock adapter)                         |
+| `npm run job -- <name>`               | Run a background job now: `import-catalogue`, `refresh-prices`, `detect-deals`, `expire-deals`, `process-alerts` |
+| `npm run user:role -- <email> <role>` | Set an account's role (`USER`, `EDITOR`, `ADMIN`) — the only way to create an admin                              |
 
 E2E tests run against `DATABASE_URL` and create uniquely-named test accounts, retailers
 and products there (prefixed "E2E"/"e2e-"). CI uses a throwaway database; locally, point

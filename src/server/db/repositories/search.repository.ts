@@ -24,7 +24,8 @@ export type DealSearch = {
   take: number;
 };
 
-const DOCUMENT = Prisma.sql`product_search_document(p."title", p."brand", p."model", p."description")`;
+/** The full-text document of product `p` (see product_search_document in the search migration). */
+export const PRODUCT_DOCUMENT = Prisma.sql`product_search_document(p."title", p."brand", p."model", p."description")`;
 
 /**
  * Plain queries: every word must match, either as a word in the product's text or — to
@@ -34,7 +35,7 @@ const DOCUMENT = Prisma.sql`product_search_document(p."title", p."brand", p."mod
  */
 function keywordCondition(q: string): Prisma.Sql {
   if (!allowsTypoMatching(q)) {
-    return Prisma.sql`${DOCUMENT} @@ websearch_to_tsquery('english', ${q})`;
+    return Prisma.sql`${PRODUCT_DOCUMENT} @@ websearch_to_tsquery('english', ${q})`;
   }
   const hasRealWord = Prisma.sql`(
     numnode(plainto_tsquery('english', ${q})) > 0
@@ -43,7 +44,7 @@ function keywordCondition(q: string): Prisma.Sql {
   const eachWord = queryTerms(q).map(
     (term) => Prisma.sql`(
       numnode(plainto_tsquery('english', ${term})) = 0
-      OR ${DOCUMENT} @@ plainto_tsquery('english', ${term})
+      OR ${PRODUCT_DOCUMENT} @@ plainto_tsquery('english', ${term})
       OR word_similarity(${term}, lower(p."title")) >= ${TYPO_SIMILARITY}
     )`,
   );
@@ -72,7 +73,7 @@ function orderBy(search: DealSearch): Prisma.Sql {
   switch (search.sort) {
     case "relevance":
       return search.q
-        ? Prisma.sql`ts_rank_cd(${DOCUMENT}, websearch_to_tsquery('english', ${search.q}))
+        ? Prisma.sql`ts_rank_cd(${PRODUCT_DOCUMENT}, websearch_to_tsquery('english', ${search.q}))
             + word_similarity(lower(${search.q}), lower(p."title")) DESC,
           d."score" DESC, d."publishedAt" DESC`
         : Prisma.sql`d."publishedAt" DESC`;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseSearchParams } from "@/lib/validation/search";
 import { createSearchService } from "@/server/services/public/search.service";
-import { createPendingDeal } from "./factories";
+import { createLiveDeal, createPendingDeal, type LiveDealOptions } from "./factories";
 import { testDb } from "./setup";
 
 const NOW = new Date(Date.UTC(2026, 5, 1, 12));
@@ -11,47 +11,8 @@ const run = async (params: Record<string, string>) =>
 const titles = async (params: Record<string, string>) =>
   (await run(params)).items.map((d) => d.title);
 
-/** A published deal; `price` and `discount` (percent) adjust the snapshot consistently. */
-async function liveDeal(
-  title: string,
-  options: {
-    description?: string;
-    brand?: string;
-    price?: number;
-    discount?: number;
-    publishedMinutesAgo?: number;
-    categoryId?: string;
-  } = {},
-) {
-  const created = await createPendingDeal(NOW, { title, externalId: title });
-  const price = options.price ?? 8000;
-  const discountBps = (options.discount ?? 20) * 100;
-  const reference = Math.round((price * 10000) / (10000 - discountBps));
-  await testDb.product.update({
-    where: { id: created.product.id },
-    data: {
-      description: options.description ?? null,
-      brand: options.brand ?? null,
-      categoryId: options.categoryId ?? null,
-      // Outside the detection window, so the next factory call's deal detection leaves this
-      // deal's adjusted price snapshot alone.
-      priceUpdatedAt: new Date(NOW.getTime() - 3 * 86_400_000),
-    },
-  });
-  await testDb.deal.update({
-    where: { id: created.deal.id },
-    data: {
-      title,
-      status: "PUBLISHED",
-      publishedAt: new Date(NOW.getTime() - (options.publishedMinutesAgo ?? 0) * 60_000),
-      dealPrice: price,
-      referencePrice: reference,
-      savingAmount: reference - price,
-      discountBps,
-    },
-  });
-  return created;
-}
+const liveDeal = (title: string, options: LiveDealOptions = {}) =>
+  createLiveDeal(NOW, title, options);
 
 describe("keyword search", () => {
   it("matches words in the title, with stemming", async () => {

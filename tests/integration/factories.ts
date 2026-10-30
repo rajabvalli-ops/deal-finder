@@ -102,3 +102,47 @@ export async function createPendingDeal(
 export function createUser(email: string, role: "USER" | "EDITOR" | "ADMIN" = "USER") {
   return testDb.user.create({ data: { email, role } });
 }
+
+export type LiveDealOptions = {
+  description?: string;
+  brand?: string;
+  price?: number;
+  discount?: number;
+  publishedMinutesAgo?: number;
+  categoryId?: string;
+};
+
+/**
+ * A PUBLISHED deal, published `publishedMinutesAgo` before `now`; `price` and `discount`
+ * (percent) adjust its snapshot consistently.
+ */
+export async function createLiveDeal(now: Date, title: string, options: LiveDealOptions = {}) {
+  const created = await createPendingDeal(now, { title, externalId: title });
+  const price = options.price ?? 8000;
+  const discountBps = (options.discount ?? 20) * 100;
+  const reference = Math.round((price * 10000) / (10000 - discountBps));
+  await testDb.product.update({
+    where: { id: created.product.id },
+    data: {
+      description: options.description ?? null,
+      brand: options.brand ?? null,
+      categoryId: options.categoryId ?? null,
+      // Outside the detection window, so the next factory call's deal detection leaves this
+      // deal's adjusted price snapshot alone.
+      priceUpdatedAt: new Date(now.getTime() - 3 * 86_400_000),
+    },
+  });
+  await testDb.deal.update({
+    where: { id: created.deal.id },
+    data: {
+      title,
+      status: "PUBLISHED",
+      publishedAt: new Date(now.getTime() - (options.publishedMinutesAgo ?? 0) * 60_000),
+      dealPrice: price,
+      referencePrice: reference,
+      savingAmount: reference - price,
+      discountBps,
+    },
+  });
+  return created;
+}

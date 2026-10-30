@@ -6,6 +6,10 @@ import type { DbClient, Retailer } from "@/server/db/types";
 import { ACTIVE_DEAL_STATUSES } from "@/server/deals/workflow";
 import { createAdapter, type RetailerAdapter } from "@/server/retailers";
 import {
+  createAlertMatchingService,
+  type MatchSummary,
+} from "@/server/services/alerts/alert-matching.service";
+import {
   createDealDetectionService,
   type DetectionSummary,
 } from "@/server/services/deals/deal-detection.service";
@@ -23,6 +27,7 @@ export const JOB_NAMES = [
   "refresh-prices",
   "detect-deals",
   "expire-deals",
+  "process-alerts",
 ] as const;
 export type JobName = (typeof JOB_NAMES)[number];
 
@@ -45,6 +50,8 @@ export type JobSettings = {
   pricesPerRetailerPerRun: number;
   /** detect-deals looks at listings priced within this window. */
   detectWindowMs: number;
+  /** process-alerts matches deals published within this window (overlap makes missed runs harmless). */
+  alertWindowMs: number;
 };
 
 export const DEFAULT_JOB_SETTINGS: JobSettings = {
@@ -53,6 +60,7 @@ export const DEFAULT_JOB_SETTINGS: JobSettings = {
   delistAfterMs: 3 * DAY_MS,
   pricesPerRetailerPerRun: 200,
   detectWindowMs: 26 * 3_600_000,
+  alertWindowMs: 26 * 3_600_000,
 };
 
 type RetailerOutcome = {
@@ -71,6 +79,7 @@ export type JobReport =
       status: "completed";
       retailers?: RetailerOutcome[];
       deals?: Omit<DetectionSummary, "errors"> & { errors: number };
+      alerts?: MatchSummary;
     }
   | { job: JobName; status: "skipped"; reason: string };
 
@@ -79,6 +88,7 @@ const LEASES: Record<JobName, number> = {
   "refresh-prices": 15 * MINUTE_MS,
   "detect-deals": 10 * MINUTE_MS,
   "expire-deals": 10 * MINUTE_MS,
+  "process-alerts": 10 * MINUTE_MS,
 };
 
 function summarise(summary: DetectionSummary) {
@@ -195,6 +205,15 @@ const JOBS: Record<
   async "expire-deals"(ctx) {
     const deals = await createDealDetectionService(ctx.client).verifyActive({ now: ctx.now });
     return { deals: summarise(deals) };
+  },
+
+  /** Notifies users whose alerts match recently published deals. */
+  async "process-alerts"(ctx, settings) {
+    const alerts = await createAlertMatchingService(ctx.client).matchDeals({
+      now: ctx.now,
+      since: new Date(ctx.now.getTime() - settings.alertWindowMs),
+    });
+    return { alerts };
   },
 };
 

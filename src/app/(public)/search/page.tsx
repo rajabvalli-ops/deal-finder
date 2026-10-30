@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Breadcrumbs } from "@/components/public/breadcrumbs";
 import { DealGrid } from "@/components/public/deal-card";
 import { SearchForm } from "@/components/public/search-form";
+import { alertHrefForSearch } from "@/lib/alerts";
 import { hasCriteria, parseSearchParams, searchHref } from "@/lib/validation/search";
 import { publicSearch } from "@/server/services/public";
 
@@ -39,6 +40,17 @@ export default async function SearchPage({ searchParams }: Props) {
             ? "No deals found"
             : `${results.total} deal${results.total === 1 ? "" : "s"}${filters.q ? ` for “${filters.q}”` : searched ? " match your filters" : " live now"}`}
         </h2>
+
+        {filters.q || filters.category ? (
+          <p className="text-sm">
+            <Link
+              href={alertHrefForSearch(filters)}
+              className="font-medium text-brand-600 hover:underline"
+            >
+              Get alerts for new deals like these
+            </Link>
+          </p>
+        ) : null}
 
         {results.items.length > 0 ? (
           <DealGrid deals={results.items} />

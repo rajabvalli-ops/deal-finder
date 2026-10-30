@@ -754,21 +754,19 @@ The app favours **Server Components for reads** and **Server Actions for admin
 mutations**, so there is little need for a large JSON API. Route Handlers exist
 where an HTTP endpoint is genuinely required.
 
-| Endpoint                       | Method         | Auth                 | Purpose                               |
-| ------------------------------ | -------------- | -------------------- | ------------------------------------- |
-| `/go/[code]`                   | GET / HEAD     | public, rate-limited | Record click, 302 to retailer         |
-| `/api/auth/[...all]`           | *              | —                    | Better Auth                           |
-| `/api/alerts`                  | GET / POST     | user                 | List / create alerts                  |
-| `/api/alerts/[id]`             | PATCH / DELETE | owner                | Update / delete alert                 |
-| `/api/search`                  | GET            | public, rate-limited | JSON search for client-side filter UI |
-| `/api/cron/import`             | POST           | `CRON_SECRET`        | Catalogue import per retailer         |
-| `/api/cron/refresh-prices`     | POST           | `CRON_SECRET`        | Price refresh                         |
-| `/api/cron/detect-deals`       | POST           | `CRON_SECRET`        | Run deal engine                       |
-| `/api/cron/expire-deals`       | POST           | `CRON_SECRET`        | Expire stale deals                    |
-| `/api/cron/process-alerts`     | POST           | `CRON_SECRET`        | Match alerts → queue notifications    |
-| `/api/cron/send-notifications` | POST           | `CRON_SECRET`        | Deliver queued notifications          |
-| `/api/health`                  | GET            | public               | Liveness + DB check                   |
-| `/api/v1/*`                    | —              | API key              | _Future_ public/partner API           |
+| Endpoint                       | Method     | Auth                 | Purpose                               |
+| ------------------------------ | ---------- | -------------------- | ------------------------------------- |
+| `/go/[code]`                   | GET / HEAD | public, rate-limited | Record click, 302 to retailer         |
+| `/api/auth/[...all]`           | *          | —                    | Better Auth                           |
+| `/api/search`                  | GET        | public, rate-limited | JSON search for client-side filter UI |
+| `/api/cron/import`             | POST       | `CRON_SECRET`        | Catalogue import per retailer         |
+| `/api/cron/refresh-prices`     | POST       | `CRON_SECRET`        | Price refresh                         |
+| `/api/cron/detect-deals`       | POST       | `CRON_SECRET`        | Run deal engine                       |
+| `/api/cron/expire-deals`       | POST       | `CRON_SECRET`        | Expire stale deals                    |
+| `/api/cron/process-alerts`     | POST       | `CRON_SECRET`        | Match alerts → in-app notifications   |
+| `/api/cron/send-notifications` | POST       | `CRON_SECRET`        | _Future:_ deliver queued emails       |
+| `/api/health`                  | GET        | public               | Liveness + DB check                   |
+| `/api/v1/*`                    | —          | API key              | _Future_ public/partner API           |
 
 ### Admin dashboard (implemented in Stage 9)
 
@@ -781,7 +779,7 @@ where an HTTP endpoint is genuinely required.
 | `/admin/retailers`         | ADMIN edits | Status (active/paused/disabled) and trust score; editors see read-only                                               |
 | `/admin/categories`        | ADMIN edits | Tree view, create (slug from name), rename/move/reorder (slug fixed, cycles refused)                                 |
 | `/admin/users`             | ADMIN only  | Search/filter, change roles (not your own; never the last admin); 404 for editors                                    |
-| `/admin/alerts`            | EDITOR+     | Read-only list (populated by the alerts stage)                                                                       |
+| `/admin/alerts`            | EDITOR+     | Read-only list of every user's alerts (users manage their own on `/alerts`) — Stage 13                               |
 | `/admin/clicks`            | EDITOR+     | 7-day clicks by people vs likely bots, most-clicked deals, click list (bots hidden unless asked for) — Stage 11      |
 
 Server Actions (`src/app/admin/**/actions.ts`): `dealAction` (approve / reject with a required
@@ -928,6 +926,41 @@ different `adapterConfig`.
   catalogue. The indexes are ready for product-level search later; a JSON `/api/search` for a
   client-side filter UI is not needed yet and was not built.
 
+### Alerts (implemented in Stage 13)
+
+`src/lib/validation/alerts.ts` (form), `src/lib/alerts.ts` (wording),
+`src/server/db/repositories/{alert,notification}.repository.ts`,
+`src/server/services/alerts/{alerts,alert-matching}.service.ts`, `src/app/(public)/alerts/`.
+
+- **Creating:** signed-in users (any role) create alerts on `/alerts` with Server Actions —
+  no JSON API. An alert needs a keyword, a category or a product; retailer, maximum price
+  and minimum discount (10/20/30/50%) narrow it. A product alert starts from a deal page
+  ("Get a price alert for this product" → `/alerts?deal=<slug>`), prefilled with the current
+  price; a search page links to `/alerts` prefilled with its keyword and filters. Keywords
+  with no searchable words ("the") are refused, as are unknown categories, inactive
+  retailers and deals that are no longer live. 25 alerts per account.
+- **Ownership:** every read and write is scoped to the session's user id (`updateMany` /
+  `deleteMany` with `userId`), so another user's id simply finds nothing. Signed-out
+  visitors see a sign-in prompt that returns them to the same `/alerts` URL.
+- **Matching (`findMatches`):** one SQL query pairs active alerts with **public** deals
+  published in the window, only if the alert existed when the deal was published (a new
+  alert never fires for deals already on the site). Keyword = all words in the product's
+  full-text document (no typo matching — notifications should be precise); category
+  includes all descendants (recursive CTE); price and discount use the engine's snapshot.
+  Pairs already notified are skipped.
+- **Delivery:** each match becomes an `IN_APP` `Notification` (status `SENT`, dedupe key
+  `<alertId>:<dealId>`, inserted with `ON CONFLICT DO NOTHING`) and the alert's
+  `lastTriggeredAt` is set. The text is built from the deal engine's numbers. The alerts
+  page lists the latest 50 with unread counts, mark-as-read and mark-all-read; a
+  notification links to its deal only while the deal is still public.
+- **Triggers:** publishing a deal in the admin runs matching for that deal straight after the
+  response (`after()`); the `process-alerts` job (hourly) re-checks the last 26 hours, so a
+  failed or missed run is caught up. Batches of 2 000 matches; the rest follow next run.
+- **Not built yet — email.** Sending email needs a provider account and key (open decision 7).
+  When one is chosen: add `EMAIL` notifications as `PENDING`, a `Notifier` for the provider,
+  a `send-notifications` job with retries (`attempts`, `lastError`), opt-in per alert and a
+  one-click unsubscribe (PECR). No email is sent or simulated today.
+
 ---
 
 ## 7. Pricing & deal engine (deterministic)
@@ -1023,8 +1056,7 @@ lists match. Only PUBLISHED deals appear on the public site.
 ## 8. Background-job architecture
 
 **Implemented in Stage 7** (`src/server/jobs/`, `src/server/services/deals/`,
-`src/app/api/cron/[job]/route.ts`, `vercel.json`). Alert and notification jobs come with the
-alerts stage.
+`src/app/api/cron/[job]/route.ts`, `vercel.json`). `process-alerts` was added in Stage 13.
 
 ### Mechanism
 
@@ -1054,6 +1086,7 @@ WHERE lockedUntil <= now`), atomic across instances and safe behind connection p
 | `refresh-prices`   | every 3 h at :07              | Per active retailer with price lookup: re-price listings with active deals first, then the least recently priced. Then run deal detection on them.                                                                   |
 | `detect-deals`     | hourly at :37                 | Deal detection for listings priced in the last 26 h (safety net if a chained run was missed).                                                                                                                        |
 | `expire-deals`     | hourly at :47                 | Re-check every active deal: expire it if the product was delisted, its `expiresAt` passed, its price hasn't been re-checked for 48 h, it no longer passes the deal engine, or its variant stopped being the default. |
+| `process-alerts`   | hourly at :52                 | Notify alerts matching deals published in the last 26 h (each alert/deal pair once). Publishing in the admin also matches that deal immediately; this is the catch-up.                                               |
 
 Because detection is chained after imports and refreshes, the pipeline still works on a
 hosting plan that only allows daily cron jobs — deals would just be detected and expired
@@ -1248,7 +1281,7 @@ Each stage ends with passing tests and a summary; no stage starts without instru
 | 10  | Public website         | Home, deals list, deal page (with chart), category & retailer pages, design system, affiliate disclosure                                |
 | 11  | Affiliate & clicks     | `AffiliateLink`, `/go/[code]`, click recording, admin clicks view                                                                       |
 | 12  | Search                 | Postgres FTS + trigram, filters, sorting, pagination                                                                                    |
-| 13  | Alerts & notifications | Alert CRUD, matching job, `Notifier` + email provider, unsubscribe                                                                      |
+| 13  | Alerts & notifications | Alert CRUD, matching job, in-app notifications (email + unsubscribe wait for a provider — see §14.7)                                    |
 | 14  | SEO                    | Metadata, canonical, sitemap, robots, OpenGraph, breadcrumbs, JSON-LD                                                                   |
 | 15  | Hardening              | Analytics rollups, rate limiting live, a11y/perf budgets, security review                                                               |
 | 16  | First real retailer    | One legitimate affiliate feed/API adapter, tested against sandbox/real credentials supplied by you                                      |
@@ -1277,8 +1310,8 @@ Each stage ends with passing tests and a summary; no stage starts without instru
    mitigated by chunking/cursors, with Inngest/QStash as the upgrade path.
 6. **Auth provider — resolved in Stage 8:** Better Auth (see §9). Originally: proposed Auth.js (no vendor lock-in, data in our DB). Clerk
    would be faster to ship but adds cost/vendor dependency. Needs your preference.
-7. **Email provider** for alerts (Resend, Postmark, SES…) — not chosen; hidden
-   behind a `Notifier` interface.
+7. **Email provider** for alerts (Resend, Postmark, SES…) — not chosen. Alerts notify
+   in-app until one is; see §5, Alerts, for what email adds.
 8. **Hosting DB provider & region** — Neon (recommended) vs Supabase vs Vercel
    Postgres; pick a London/EU region for latency and data residency.
 9. **Price-history volume** — mitigated by write-on-change; partition later.
