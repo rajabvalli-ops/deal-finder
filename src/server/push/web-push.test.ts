@@ -35,6 +35,7 @@ const message: PushMessage = {
   body: "Glass Kettle is £9.99 at Example Shop, 90% below its recent average price.",
   url: "/deals/glass-kettle-abc123",
   tag: "deal-glass-kettle-abc123",
+  image: "https://m.media-amazon.com/images/I/kettle.jpg",
   urgent: true,
 };
 

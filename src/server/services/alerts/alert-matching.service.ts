@@ -1,5 +1,5 @@
 import "server-only";
-import { alertNotificationContent } from "@/lib/alerts";
+import { alertNotificationContent, alertPushContent } from "@/lib/alerts";
 import { createAlertRepository } from "@/server/db/repositories/alert.repository";
 import { createNotificationRepository } from "@/server/db/repositories/notification.repository";
 import { inTransaction } from "@/server/db/transaction";
@@ -74,9 +74,9 @@ export function createAlertMatchingService(
             ? [
                 {
                   userId: row.userId,
-                  subject: row.subject,
-                  body: row.body,
+                  ...alertPushContent(match),
                   dealSlug: match.dealSlug,
+                  imageUrl: match.imageUrl,
                   level: match.level,
                 },
               ]

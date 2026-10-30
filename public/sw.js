@@ -13,6 +13,12 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(title, {
       body: typeof data.body === "string" ? data.body : "",
+      icon: "/icon-192.png",
+      badge: "/badge-96.png",
+      image:
+        typeof data.image === "string" && data.image.startsWith("https://")
+          ? data.image
+          : undefined,
       tag: typeof data.tag === "string" ? data.tag : undefined,
       data: { url },
       requireInteraction: data.urgent === true,

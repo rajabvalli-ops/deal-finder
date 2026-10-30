@@ -11,11 +11,14 @@ export const metadata: Metadata = {
   metadataBase: new URL(env.NEXT_PUBLIC_SITE_URL),
   title: { default: site.name, template: `%s | ${site.name}` },
   description: site.tagline,
+  icons: { icon: "/icon-192.png", apple: "/apple-touch-icon.png" },
+  appleWebApp: { capable: true, title: site.name, statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  themeColor: "#1d5fd1",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

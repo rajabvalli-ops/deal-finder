@@ -29,6 +29,7 @@ export type AlertMatch = {
   dealId: string;
   dealSlug: string;
   title: string;
+  imageUrl: string | null;
   dealPrice: number;
   discountBps: number;
   referenceType: ReferenceType;
@@ -101,7 +102,7 @@ export function createAlertRepository(client: DbClient) {
           SELECT t."rootId", c."id" FROM "Category" c JOIN tree t ON c."parentId" = t."id"
         )
         SELECT a."id" AS "alertId", a."userId", d."id" AS "dealId", d."slug" AS "dealSlug",
-               d."title", d."dealPrice",
+               d."title", d."imageUrl", d."dealPrice",
                d."discountBps", d."referenceType"::text AS "referenceType",
                d."level"::text AS "level", r."name" AS "retailerName"
         FROM "Alert" a

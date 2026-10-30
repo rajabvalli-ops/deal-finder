@@ -62,6 +62,27 @@ export function alertNotificationContent(deal: MatchedDeal): { subject: string; 
   };
 }
 
+const PUSH_HEADLINE: Record<DealLevel, string> = {
+  NORMAL: "🔔 Price alert",
+  BIG_DROP: "📉 Big price drop",
+  PRICE_ERROR: "🚨 Possible price error!",
+};
+
+const MAX_PUSH_TITLE = 80;
+
+/**
+ * The short text of a push notification: a headline, then the price first —
+ * "£3.06 for Oust Descaler 18 Sachets · 85% off at Amazon UK". Lock screens cut long text.
+ */
+export function alertPushContent(deal: MatchedDeal): { title: string; body: string } {
+  const name =
+    deal.title.length > MAX_PUSH_TITLE ? `${deal.title.slice(0, MAX_PUSH_TITLE - 1)}…` : deal.title;
+  return {
+    title: PUSH_HEADLINE[deal.level],
+    body: `${formatPrice(deal.dealPrice)} for ${name} · ${formatBps(deal.discountBps)} off at ${deal.retailerName}`,
+  };
+}
+
 const LEVEL_PREFIX: Record<DealLevel, string> = {
   NORMAL: "Price alert",
   BIG_DROP: "Big price drop",

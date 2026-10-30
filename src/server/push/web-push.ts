@@ -32,6 +32,8 @@ export type PushMessage = {
   body: string;
   /** Same-site path opened when the notification is clicked. */
   url: string;
+  /** Product photo shown in large notifications (Android, desktop Chrome); https only. */
+  image: string | null;
   /** Notifications with the same tag replace each other on the device. */
   tag: string;
   urgent: boolean;

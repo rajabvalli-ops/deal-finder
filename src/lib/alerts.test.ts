@@ -3,6 +3,7 @@ import {
   alertCondition,
   alertHrefForSearch,
   alertNotificationContent,
+  alertPushContent,
   alertWatching,
   DEAL_LEVEL_LABELS,
 } from "./alerts";
@@ -84,6 +85,30 @@ describe("levels", () => {
       BIG_DROP: "Big drop",
       PRICE_ERROR: "Possible price error",
     });
+  });
+});
+
+describe("alertPushContent", () => {
+  const deal = {
+    title: "Oust Descaler 18 Sachets",
+    dealPrice: 306,
+    discountBps: 8500,
+    retailerName: "Amazon UK",
+    referenceType: "AVG_30" as const,
+  };
+
+  it("leads with a headline, then the price", () => {
+    expect(alertPushContent({ ...deal, level: "PRICE_ERROR" })).toEqual({
+      title: "🚨 Possible price error!",
+      body: "£3.06 for Oust Descaler 18 Sachets · 85% off at Amazon UK",
+    });
+    expect(alertPushContent({ ...deal, level: "BIG_DROP" }).title).toBe("📉 Big price drop");
+    expect(alertPushContent({ ...deal, level: "NORMAL" }).title).toBe("🔔 Price alert");
+  });
+
+  it("shortens long product names for lock screens", () => {
+    const body = alertPushContent({ ...deal, level: "NORMAL", title: "x".repeat(200) }).body;
+    expect(body).toBe(`£3.06 for ${"x".repeat(79)}… · 85% off at Amazon UK`);
   });
 });
 

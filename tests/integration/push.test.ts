@@ -76,10 +76,11 @@ describe("push delivery", () => {
       subscription(2).endpoint,
     ]);
     expect(sent[0]!.message).toEqual({
-      title: "Price alert: Glass Kettle",
-      body: expect.stringMatching(/^Glass Kettle is £80\.00/),
+      title: "🔔 Price alert",
+      body: expect.stringMatching(/^£80\.00 for Glass Kettle · 20% off at Test Retailer \d+$/),
       url: `/deals/${live.deal.slug}`,
       tag: `deal-${live.deal.slug}`,
+      image: null,
       urgent: false,
     });
     expect(await testDb.pushSubscription.findMany({ select: { lastSuccessAt: true } })).toEqual([
@@ -104,9 +105,10 @@ describe("push delivery", () => {
     const delivery = createPushDelivery(testDb, sender);
     const notice = {
       userId: user.id,
-      subject: "s",
+      title: "t",
       body: "b",
       dealSlug: "d",
+      imageUrl: null,
       level: "PRICE_ERROR" as const,
     };
 

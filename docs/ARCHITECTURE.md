@@ -964,7 +964,12 @@ different `adapterConfig`.
   `npm run push:keys`; no third-party account. Subscriptions are only accepted for the
   browsers' own push services (Google, Mozilla, Apple, Microsoft hosts), so the server can't
   be pointed at arbitrary URLs. Gone subscriptions (404/410) are dropped, as are ones failing
-  5 times in a row. Push is best effort: the in-app notification is stored first. Encryption
+  5 times in a row. Push is best effort: the in-app notification is stored first. Pushes are
+  short and price-first (`alertPushContent`): "🚨 Possible price error!" / "£3.06 for Oust
+  Descaler 18 Sachets · 85% off at Amazon UK", with the site icon, a status-bar badge and the
+  product photo where the platform shows one. A web app manifest (`src/app/manifest.ts`) lets
+  iPhone users add the site to their Home Screen, which iOS requires before it delivers push.
+  Icons are drawn in `assets/icons/*.svg` and rendered with `node assets/icons/render.mjs`. Encryption
   and VAPID signing are tested by decrypting a real payload; subscribing in a real browser
   needs the browser's push service and has not been exercised here.
 

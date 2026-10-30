@@ -11,9 +11,11 @@ import {
 
 export type PushNotice = {
   userId: string;
-  subject: string;
+  /** Push headline and text (see alertPushContent). */
+  title: string;
   body: string;
   dealSlug: string;
+  imageUrl: string | null;
   level: DealLevel;
 };
 
@@ -59,9 +61,10 @@ export function createPushDelivery(client: DbClient, sender: PushSender) {
 
 function toMessage(notice: PushNotice): PushMessage {
   return {
-    title: notice.subject,
+    title: notice.title,
     body: notice.body,
     url: `/deals/${notice.dealSlug}`,
+    image: notice.imageUrl?.startsWith("https://") ? notice.imageUrl : null,
     tag: `deal-${notice.dealSlug}`,
     urgent: notice.level !== "NORMAL",
   };
