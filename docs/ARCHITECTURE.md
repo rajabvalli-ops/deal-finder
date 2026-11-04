@@ -935,7 +935,7 @@ different `adapterConfig`.
 - **Links:** product URLs are stored as `https://www.amazon.co.uk/dp/<ASIN>`; the outbound
   link adds `?tag=<AMAZON_ASSOCIATE_TAG>` and nothing else. Without a valid tag no link is
   built, so an untagged (unpaid) link can't go out.
-- **Compliance notes:** the site-wide disclosure includes "As an Amazon Associate, Deal Finder
+- **Compliance notes:** the site-wide disclosure includes "As an Amazon Associate, Deal Broker
   earns from qualifying purchases."; every price shows when it was checked; `refresh-prices`
   re-checks tracked items every 3 hours. Amazon's terms restrict Associates links in emails —
   alerts link to our own deal pages, never straight to Amazon.
@@ -969,7 +969,10 @@ different `adapterConfig`.
   Descaler 18 Sachets · 85% off at Amazon UK", with the site icon, a status-bar badge and the
   product photo where the platform shows one. A web app manifest (`src/app/manifest.ts`) lets
   iPhone users add the site to their Home Screen, which iOS requires before it delivers push.
-  Icons are drawn in `assets/icons/*.svg` and rendered with `node assets/icons/render.mjs`. Encryption
+  Icons are drawn in `assets/icons/*.svg` and rendered with `node assets/icons/render.mjs`.
+- **Brand:** the site is called **Deal Broker** (`src/lib/site.ts`). Navy and red frame the
+  header, homepage hero and icon (`--color-navy-*`, `--color-accent-*` in `globals.css`); the
+  content keeps the neutral palette. Encryption
   and VAPID signing are tested by decrypting a real payload; subscribing in a real browser
   needs the browser's push service and has not been exercised here.
 

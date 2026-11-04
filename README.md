@@ -1,4 +1,4 @@
-# Deal Finder
+# Deal Broker
 
 UK deal discovery and price-intelligence platform (working name).
 

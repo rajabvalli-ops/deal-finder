@@ -1,10 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- Deal Finder app icon: a price tag with a pound sign. Full-bleed so it also works as a maskable icon. -->
-  <rect width="512" height="512" fill="#1d5fd1"/>
-  <g transform="rotate(-20 256 256)">
-    <path d="M126 256 L216 146 H366 a20 20 0 0 1 20 20 V346 a20 20 0 0 1 -20 20 H216 Z" stroke="#ffffff" stroke-width="16" stroke-linejoin="round" fill="#ffffff"/>
-    <circle cx="196" cy="256" r="18" fill="#1d5fd1"/>
-    <text x="296" y="308" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="700"
-          font-size="150" fill="#1d5fd1">£</text>
+  <!-- Deal Broker app icon: a red price tag with a pound sign on navy. Full-bleed so it also
+       works as a maskable icon. -->
+  <rect width="512" height="512" fill="#0b1b40"/>
+  <rect y="452" width="512" height="60" fill="#d01f2c"/>
+  <rect y="440" width="512" height="12" fill="#ffffff"/>
+  <g transform="rotate(-20 256 236)">
+    <path d="M126 236 L216 126 H366 a20 20 0 0 1 20 20 V326 a20 20 0 0 1 -20 20 H216 Z"
+          stroke="#e8333f" stroke-width="16" stroke-linejoin="round" fill="#e8333f"/>
+    <circle cx="196" cy="236" r="18" fill="#0b1b40"/>
+    <text x="296" y="290" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900"
+          font-size="150" fill="#ffffff">£</text>
   </g>
 </svg>

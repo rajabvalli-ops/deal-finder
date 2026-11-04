@@ -6,6 +6,11 @@
   --color-brand-600: #1d5fd1;
   --color-brand-700: #184ea9;
   --color-saving-600: #0f7a4a;
+  /* Brand frame (header, hero, icon): navy with a red accent. */
+  --color-navy-800: #12285c;
+  --color-navy-900: #0b1b40;
+  --color-accent-500: #e8333f;
+  --color-accent-600: #d01f2c;
   --color-surface: #ffffff;
   --color-surface-muted: #f4f6f9;
   --color-ink: #121826;

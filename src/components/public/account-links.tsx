@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 
 type Session = { email: string; role: string } | null;
 
-const link = "hover:text-brand-600";
+const link = "hover:underline underline-offset-4";
 
 /**
  * The signed-in part of the header. Pages are cached and shared by everyone, so the session

@@ -18,7 +18,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#1d5fd1",
+  themeColor: "#0b1b40",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -31,16 +31,30 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         >
           Skip to content
         </a>
-        <header className="border-b border-line">
+        <header className="border-b-4 border-accent-600 bg-navy-900 text-white">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
-            <Link href="/" className="text-lg font-bold text-brand-600">
-              {site.name}
+            <Link href="/" className="flex items-center gap-2" aria-label={`${site.name} home`}>
+              {/* eslint-disable-next-line @next/next/no-img-element -- small static logo */}
+              <img src="/icon-192.png" alt="" width={36} height={36} className="rounded-lg" />
+              <span className="text-xl font-black tracking-tight uppercase">
+                Deal <span className="text-accent-500">Broker</span>
+              </span>
+              <span className="rounded bg-accent-600 px-1.5 py-0.5 text-[10px] font-bold tracking-wider">
+                UK
+              </span>
             </Link>
             <nav aria-label="Main">
-              <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm font-medium">
+              <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm font-semibold">
                 {primaryNav.map((item) => (
                   <li key={item.href}>
-                    <Link href={item.href} className="hover:text-brand-600">
+                    <Link
+                      href={item.href}
+                      className={
+                        item.href === "/price-drops"
+                          ? "rounded bg-accent-600 px-2 py-0.5 hover:bg-accent-500"
+                          : "hover:underline underline-offset-4"
+                      }
+                    >
                       {item.label}
                     </Link>
                   </li>
