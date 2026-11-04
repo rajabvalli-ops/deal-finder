@@ -1,6 +1,7 @@
 export const site = {
   name: "Deal Broker",
-  tagline: "UK price drops and price errors, checked against real price history.",
+  tagline:
+    "Your source for UK deals — price errors and price drops, checked against real price history.",
 } as const;
 
 export const primaryNav = [

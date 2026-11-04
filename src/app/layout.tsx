@@ -18,7 +18,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#0b1b40",
+  themeColor: "#0d0d10",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -31,15 +31,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         >
           Skip to content
         </a>
-        <header className="border-b-4 border-accent-600 bg-navy-900 text-white">
+        <header className="border-b-4 border-lime-400 bg-frame-900 text-white">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
             <Link href="/" className="flex items-center gap-2" aria-label={`${site.name} home`}>
               {/* eslint-disable-next-line @next/next/no-img-element -- small static logo */}
-              <img src="/icon-192.png" alt="" width={36} height={36} className="rounded-lg" />
-              <span className="text-xl font-black tracking-tight uppercase">
-                Deal <span className="text-accent-500">Broker</span>
-              </span>
-              <span className="rounded bg-accent-600 px-1.5 py-0.5 text-[10px] font-bold tracking-wider">
+              <img src="/icon-192.png" alt="" width={36} height={36} className="rounded-full" />
+              <span className="text-xl font-black tracking-tight uppercase">Deal Broker</span>
+              <span className="rounded bg-lime-400 px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-black">
                 UK
               </span>
             </Link>
@@ -51,7 +49,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                       href={item.href}
                       className={
                         item.href === "/price-drops"
-                          ? "rounded bg-accent-600 px-2 py-0.5 hover:bg-accent-500"
+                          ? "rounded bg-lime-400 px-2 py-0.5 text-black hover:bg-lime-300"
                           : "hover:underline underline-offset-4"
                       }
                     >

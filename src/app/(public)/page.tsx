@@ -37,12 +37,12 @@ export default async function HomePage() {
 
   return (
     <div className="space-y-12">
-      <section className="space-y-4 overflow-hidden rounded-2xl bg-gradient-to-br from-navy-900 to-navy-800 px-6 py-10 text-white sm:px-10">
-        <p className="text-xs font-bold tracking-[0.2em] text-accent-500 uppercase">
-          Price drops · Price errors · Every day
+      <section className="space-y-4 overflow-hidden rounded-2xl bg-gradient-to-br from-frame-900 to-frame-800 px-6 py-10 text-white sm:px-10">
+        <p className="text-xs font-bold tracking-[0.25em] text-lime-400 uppercase">
+          UK deals · Posted daily
         </p>
         <h1 className="max-w-2xl text-3xl font-black tracking-tight uppercase sm:text-5xl">
-          Real deals. <span className="text-accent-500">Before they&apos;re gone.</span>
+          Your source for <span className="text-lime-400">all deals.</span>
         </h1>
         <p className="max-w-2xl text-lg text-white/80">
           {site.name} watches UK prices around the clock and only lists a deal when the price is
@@ -64,7 +64,7 @@ export default async function HomePage() {
           <li>
             <Link
               href="/price-drops"
-              className="block rounded-full bg-accent-600 px-4 py-1.5 hover:bg-accent-500"
+              className="block rounded-full bg-lime-400 px-4 py-1.5 text-black hover:bg-lime-300"
             >
               🚨 Price errors &amp; big drops
             </Link>

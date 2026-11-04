@@ -147,7 +147,7 @@ export function SearchBox() {
       />
       <button
         type="submit"
-        className="rounded-md bg-accent-600 px-5 py-2 font-semibold text-white hover:bg-accent-500"
+        className="rounded-md bg-lime-400 px-5 py-2 font-bold text-black hover:bg-lime-300"
       >
         Search
       </button>

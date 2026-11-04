@@ -970,9 +970,10 @@ different `adapterConfig`.
   product photo where the platform shows one. A web app manifest (`src/app/manifest.ts`) lets
   iPhone users add the site to their Home Screen, which iOS requires before it delivers push.
   Icons are drawn in `assets/icons/*.svg` and rendered with `node assets/icons/render.mjs`.
-- **Brand:** the site is called **Deal Broker** (`src/lib/site.ts`). Navy and red frame the
-  header, homepage hero and icon (`--color-navy-*`, `--color-accent-*` in `globals.css`); the
-  content keeps the neutral palette. Encryption
+- **Brand:** the site is called **Deal Broker** (`src/lib/site.ts`), matching the owner's
+  social branding: near-black with lime `#C7FE2E` and the "DB" tag monogram. The frame
+  (header, homepage hero, icon) uses `--color-frame-*` and `--color-lime-*` in `globals.css`;
+  lime always carries black text. Content keeps the neutral palette; price-error badges stay red. Encryption
   and VAPID signing are tested by decrypting a real payload; subscribing in a real browser
   needs the browser's push service and has not been exercised here.
 

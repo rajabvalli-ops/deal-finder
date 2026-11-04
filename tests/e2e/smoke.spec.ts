@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 const shells = [
-  { path: "/", heading: /Real deals\. Before they.re gone\./ },
+  { path: "/", heading: "Your source for all deals." },
   { path: "/deals", heading: "Latest deals" },
   { path: "/search", heading: "Search deals" },
   { path: "/alerts", heading: "Price alerts" },
