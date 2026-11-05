@@ -19,6 +19,9 @@ search, price alerts with in-app and browser push notifications, and:
 - **Big drops (35%+) and possible price errors (70%+)**, flagged by the deal engine, shown on
   `/price-drops`, and alertable ("alert me about every price error").
 - **Auto-publish** per retailer, so deals (and alerts) go out without waiting for an editor.
+- **Voucher codes** (`/vouchers`, and on deal pages) with one-tap copy, added by editors.
+- **"Report a problem"** on every deal and voucher; vouchers are switched off automatically
+  after three "doesn't work" reports, deal reports go to the admin's Reports queue.
 
 Email notifications wait for an email provider.
 

@@ -13,7 +13,8 @@ export type AdminErrorCode =
   | "LIMIT_REACHED"
   | "SOCIAL_OFF"
   | "NOT_LIVE"
-  | "SOCIAL_FAILED";
+  | "SOCIAL_FAILED"
+  | "WRONG_DEAL";
 
 export type AdminResult<T = void> = { ok: true; value: T } | { ok: false; error: AdminErrorCode };
 
@@ -37,6 +38,7 @@ export const ADMIN_ERROR_MESSAGES: Record<AdminErrorCode, string> = {
   LIMIT_REACHED: "That's more than this retailer can track. Remove some first.",
   SOCIAL_OFF: "Posting to X isn't set up yet: add the X API keys to the environment.",
   NOT_LIVE: "Only live (published) deals can be posted.",
+  WRONG_DEAL: "That deal doesn't exist or is at a different retailer.",
   SOCIAL_FAILED:
     "It wasn't posted: today's posting limit is used up, X rejected it, or it was already posted. See the X posts list below.",
 };

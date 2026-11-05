@@ -125,6 +125,7 @@ export function createPublicCatalogueService(client: DbClient) {
       );
       return {
         ...toSummary(row),
+        id: row.id,
         linkCode: linkCodes.get(row.productId) ?? null,
         summary: row.summary,
         description: row.description,
