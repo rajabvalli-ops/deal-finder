@@ -36,7 +36,15 @@ Email notifications wait for an email provider.
 
 Products need 14 days of price history before deals (and alerts) can appear for them.
 
-### Turning on auto-posting to X
+### Posting deals to X
+
+**Free, no setup beyond push notifications:** each live deal's admin page has "Tweet this
+(opens X)", which opens X with the post written for you. With push turned on (below) and
+notifications enabled on your phone while signed in as an editor or admin, you also get a
+"🚨 Price error — tap to tweet" notification for every big drop and price error. Set
+`X_POST_LINKS=amazon` to link straight to Amazon with your tag instead of to your site.
+
+**Fully automatic (paid X API):**
 
 1. In the X developer portal (developer.x.com), create a project and app for the
    @Dealbrokerr account, set its permissions to **Read and write**, and add credit
@@ -44,7 +52,8 @@ Products need 14 days of price history before deals (and alerts) can appear for 
 2. Generate the **API key and secret** and the account's **access token and secret**, and set
    `X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET`.
 3. Optional: `X_DAILY_POST_LIMIT` (default 10), `X_POST_MIN_LEVEL` (`big-drop` default, or
-   `price-error`, or `normal` for every deal), `X_POST_LINKS=none` to post without links.
+   `price-error`, or `normal` for every deal), `X_POST_LINKS` (`deal-page` default, `amazon`
+   to link straight to the retailer with your tag, or `none`).
 4. Deals then post automatically; editors can also press "Post to X now" on a live deal.
    Add "As an Amazon Associate I earn from qualifying purchases" to the X bio, and mark the
    account as automated in X's settings.

@@ -1,8 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { runJob } from "@/server/jobs/jobs";
 import { postDealToSocial } from "@/server/services/admin";
-import type { SocialConfig } from "@/server/social/config";
-import { createSocialPostingService, type Poster } from "@/server/social/social-posting.service";
+import type { ShareSettings } from "@/server/social/config";
+import { createSharePushService, sharePushFromEnv } from "@/server/social/share-push.service";
+import {
+  createSocialPostingService,
+  shareIntentForDeal,
+  type Poster,
+} from "@/server/social/social-posting.service";
 import { XApiError } from "@/server/social/x-client";
 import { createPendingDeal } from "./factories";
 import { testDb } from "./setup";
@@ -20,8 +25,8 @@ const KEYS = {
   NEXT_PUBLIC_SITE_URL: "https://dealbroker.example",
 };
 
-const config = (overrides: Partial<SocialConfig> = {}): SocialConfig => ({
-  credentials: { apiKey: "k", apiSecret: "s", accessToken: "t", accessTokenSecret: "ts" },
+const config = (overrides: Partial<ShareSettings> = {}): ShareSettings & { network: string } => ({
+  network: "x",
   dailyLimit: 10,
   minLevel: "BIG_DROP",
   links: "deal-page",
@@ -206,5 +211,124 @@ describe("posting from jobs and the admin", () => {
       ok: false,
       error: "SOCIAL_FAILED",
     });
+  });
+});
+
+describe("tap to tweet", () => {
+  const VAPID = {
+    VAPID_PUBLIC_KEY: "pub",
+    VAPID_PRIVATE_KEY: "priv",
+    VAPID_SUBJECT: "mailto:x@example.test",
+  };
+
+  async function editorWithDevice(email: string, role: "EDITOR" | "ADMIN" | "USER" = "EDITOR") {
+    const user = await testDb.user.create({ data: { email, role } });
+    await testDb.pushSubscription.create({
+      data: {
+        userId: user.id,
+        endpoint: `https://fcm.googleapis.com/fcm/send/${email}`,
+        p256dh: "p",
+        auth: "a",
+      },
+    });
+    return user;
+  }
+
+  it("pushes each big drop and price error to editors, linking to the tweet page", async () => {
+    await editorWithDevice("editor@example.test");
+    await editorWithDevice("shopper@example.test", "USER");
+    const glitch = await liveDeal("Glitch Kettle", 900);
+    await liveDeal("Normal Kettle", 8000);
+    const sent: { endpoint: string; message: { title: string; body: string; url: string } }[] = [];
+    const sender = {
+      send: vi.fn(async (target: { endpoint: string }, message: never) => {
+        sent.push({ endpoint: target.endpoint, message });
+        return "delivered" as const;
+      }),
+    };
+    const service = createSharePushService(testDb, sender, {});
+    expect(await service.run({ now: NOW, since })).toMatchObject({ queued: 1, posted: 1 });
+    expect(sent).toEqual([
+      {
+        endpoint: "https://fcm.googleapis.com/fcm/send/editor@example.test",
+        message: expect.objectContaining({
+          title: "🚨 Price error — tap to tweet",
+          body: "£9.00 for Glitch Kettle",
+          url: `/admin/deals/${glitch.deal.id}/tweet`,
+          urgent: true,
+        }),
+      },
+    ]);
+    expect(
+      await testDb.socialPost.findFirstOrThrow({ where: { dealId: glitch.deal.id } }),
+    ).toMatchObject({ network: "x-share", status: "POSTED", externalId: null });
+  });
+
+  it("retries when no editor has notifications on, then gives up", async () => {
+    await liveDeal("Glitch Kettle", 900);
+    const sender = { send: vi.fn(async () => "delivered" as const) };
+    for (let i = 0; i < 3; i++) {
+      await createSharePushService(testDb, sender, {}).run({ now: NOW, since });
+    }
+    expect(await testDb.socialPost.findFirstOrThrow()).toMatchObject({
+      status: "FAILED",
+      attempts: 3,
+      lastError: "No editor or admin has turned on notifications on a device",
+    });
+  });
+
+  it("drops dead editor devices and counts it as not sent", async () => {
+    await editorWithDevice("gone@example.test");
+    await liveDeal("Glitch Kettle", 900);
+    const sender = { send: vi.fn(async () => "gone" as const) };
+    expect(
+      await createSharePushService(testDb, sender, {}).postDeal({
+        dealId: (await testDb.deal.findFirstOrThrow()).id,
+        level: "PRICE_ERROR",
+        now: NOW,
+      }),
+    ).toMatchObject({ posted: 0 });
+    expect(await testDb.pushSubscription.count()).toBe(0);
+  });
+
+  it("runs from the jobs when push is set up and X's API isn't", async () => {
+    await liveDeal("Glitch Kettle", 900);
+    expect(sharePushFromEnv(testDb, {})).toBeUndefined();
+    expect(sharePushFromEnv(testDb, { ...VAPID, ...KEYS })).toBeUndefined();
+    const report = await runJob("post-social", { client: testDb, now: NOW, env: VAPID });
+    // No editor devices yet: queued and waiting for a retry.
+    expect(report).toMatchObject({ share: { queued: 1, posted: 0 } });
+    expect(report).not.toHaveProperty("social");
+  });
+
+  it("fills in X's compose screen, linking to our page or straight to the retailer", async () => {
+    const { deal, product } = await liveDeal("Glitch Kettle", 900);
+    await testDb.affiliateLink.create({
+      data: {
+        code: "abc123",
+        retailerId: deal.retailerId,
+        productId: product.id,
+        destinationUrl: "https://www.amazon.co.uk/dp/B0TEST0001?tag=dealbroker-21",
+      },
+    });
+    const text = (env: Record<string, string>) =>
+      shareIntentForDeal(testDb, deal.id, env).then((url) =>
+        new URL(url!).searchParams.get("text"),
+      );
+    expect(await text({ NEXT_PUBLIC_SITE_URL: "https://dealbroker.example" })).toContain(
+      `https://dealbroker.example/deals/${deal.slug}`,
+    );
+    expect(await text({ X_POST_LINKS: "amazon" })).toContain(
+      "https://www.amazon.co.uk/dp/B0TEST0001?tag=dealbroker-21",
+    );
+    expect(await text({ X_POST_LINKS: "none" })).not.toContain("https://");
+    await testDb.deal.update({ where: { id: deal.id }, data: { status: "EXPIRED" } });
+    expect(await shareIntentForDeal(testDb, deal.id, {})).toBeNull();
+  });
+
+  it("falls back to the deal page when a product has no retailer link", async () => {
+    const { deal } = await liveDeal("Glitch Kettle", 900);
+    const url = await shareIntentForDeal(testDb, deal.id, { X_POST_LINKS: "retailer" });
+    expect(new URL(url!).searchParams.get("text")).toContain(`/deals/${deal.slug}`);
   });
 });

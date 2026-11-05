@@ -37,6 +37,14 @@ export function createPushSubscriptionRepository(client: DbClient) {
       });
     },
 
+    /** Subscriptions of users with one of `roles` (e.g. editors, for "tap to tweet"). */
+    listForRoles(roles: ("USER" | "EDITOR" | "ADMIN")[]) {
+      return client.pushSubscription.findMany({
+        where: { user: { role: { in: roles } } },
+        orderBy: { createdAt: "asc" },
+      });
+    },
+
     markDelivered(id: string, at: Date) {
       return client.pushSubscription.update({
         where: { id },

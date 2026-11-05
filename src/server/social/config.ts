@@ -1,8 +1,9 @@
 import type { DealLevel } from "@/lib/public-types";
 import type { XCredentials } from "./x-client";
 
-// Auto-posting settings, all from the environment. Without the four X keys nothing is
-// queued or posted, so the feature costs nothing until it is switched on.
+// Social posting settings, all from the environment. The share settings (what to post and how
+// to link) always apply; the X API keys are only needed for fully automatic posting. Without
+// them the site prepares each post for a person to send ("tap to tweet"), which costs nothing.
 
 export const SOCIAL_ENV = {
   apiKey: "X_API_KEY",
@@ -14,44 +15,63 @@ export const SOCIAL_ENV = {
   links: "X_POST_LINKS",
 } as const;
 
-export type LinkMode = "deal-page" | "none";
+/**
+ * Where a post links: our deal page; straight to the retailer through the product's
+ * affiliate link (for Amazon: the tagged amazon.co.uk page, so X shows Amazon's preview); or
+ * no link (much cheaper through X's API).
+ */
+export type LinkMode = "deal-page" | "retailer" | "none";
 
-export type SocialConfig = {
-  credentials: XCredentials;
-  /** Posts allowed in any 24 hours (X charges per post). */
+export type ShareSettings = {
+  /** Posts allowed in any 24 hours (X charges per API post). */
   dailyLimit: number;
-  /** Deals at this level or above are posted automatically. */
+  /** Deals at this level or above are posted (or offered for posting). */
   minLevel: DealLevel;
-  /** Link to the deal page on our site, or post without a link (much cheaper on X). */
   links: LinkMode;
   siteUrl: string;
 };
+
+export type SocialConfig = ShareSettings & { credentials: XCredentials };
 
 const DEFAULT_DAILY_LIMIT = 10;
 const MAX_DAILY_LIMIT = 200;
 const LEVELS: readonly DealLevel[] = ["NORMAL", "BIG_DROP", "PRICE_ERROR"];
 
-/** Settings, or null when X isn't connected. Invalid optional values fall back to defaults. */
-export function socialConfigFromEnv(
-  env: Readonly<Record<string, string | undefined>>,
-): SocialConfig | null {
-  const value = (key: string) => env[key]?.trim() || undefined;
-  const apiKey = value(SOCIAL_ENV.apiKey);
-  const apiSecret = value(SOCIAL_ENV.apiSecret);
-  const accessToken = value(SOCIAL_ENV.accessToken);
-  const accessTokenSecret = value(SOCIAL_ENV.accessTokenSecret);
-  if (!apiKey || !apiSecret || !accessToken || !accessTokenSecret) return null;
+type Env = Readonly<Record<string, string | undefined>>;
+const reader = (env: Env) => (key: string) => env[key]?.trim() || undefined;
 
+/** What to post and how to link it. Invalid values fall back to the defaults. */
+export function shareSettingsFromEnv(env: Env): ShareSettings {
+  const value = reader(env);
   const limit = Number(value(SOCIAL_ENV.dailyLimit));
   const level = value(SOCIAL_ENV.minLevel)?.toUpperCase().replace(/-/g, "_");
+  const links = value(SOCIAL_ENV.links)?.toLowerCase();
   return {
-    credentials: { apiKey, apiSecret, accessToken, accessTokenSecret },
     dailyLimit:
       Number.isInteger(limit) && limit >= 0 && limit <= MAX_DAILY_LIMIT
         ? limit
         : DEFAULT_DAILY_LIMIT,
     minLevel: LEVELS.includes(level as DealLevel) ? (level as DealLevel) : "BIG_DROP",
-    links: value(SOCIAL_ENV.links) === "none" ? "none" : "deal-page",
+    links:
+      links === "none"
+        ? "none"
+        : links === "retailer" || links === "amazon"
+          ? "retailer"
+          : "deal-page",
     siteUrl: (value("NEXT_PUBLIC_SITE_URL") ?? "http://localhost:3000").replace(/\/+$/, ""),
+  };
+}
+
+/** Settings for automatic posting through X's API, or null when the X keys aren't set. */
+export function socialConfigFromEnv(env: Env): SocialConfig | null {
+  const value = reader(env);
+  const apiKey = value(SOCIAL_ENV.apiKey);
+  const apiSecret = value(SOCIAL_ENV.apiSecret);
+  const accessToken = value(SOCIAL_ENV.accessToken);
+  const accessTokenSecret = value(SOCIAL_ENV.accessTokenSecret);
+  if (!apiKey || !apiSecret || !accessToken || !accessTokenSecret) return null;
+  return {
+    credentials: { apiKey, apiSecret, accessToken, accessTokenSecret },
+    ...shareSettingsFromEnv(env),
   };
 }

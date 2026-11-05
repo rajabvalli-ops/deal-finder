@@ -993,8 +993,17 @@ different `adapterConfig`.
   honestly ("Was" only for a real previous price, otherwise "30-day average"), a
   cancellation warning on price errors, the link, and `#ad` (affiliate posts must be labelled
   as ads). Fits X's 280-character count (URLs 23, emoji 2).
-- **Links:** to our deal page (which has the Amazon button, price-checked time and
-  disclosure), or none (`X_POST_LINKS=none`) — X charges much more for posts with a link.
+- **Links** (`X_POST_LINKS`): `deal-page` (default; our page with the Amazon button,
+  price-checked time and disclosure), `retailer` (alias `amazon`; straight to the product's
+  affiliate link — for Amazon the tagged amazon.co.uk page, so X shows Amazon's preview; falls
+  back to the deal page if a product has none), or `none` — X charges much more for API posts
+  with a link.
+- **Tap to tweet (no X API, free):** without the X keys but with push set up, each post-worthy
+  deal is pushed to editors' and admins' devices ("🚨 Price error — tap to tweet"), at most 50 a
+  day, recorded as network `x-share`. The push opens `/admin/deals/<id>/tweet` (editors only),
+  which redirects to X's compose screen (`x.com/intent/post`) with the post filled in; a
+  person presses Post. Every live deal's admin page also has "Tweet this (opens X)". If no
+  editor has notifications on, the push is retried, then marked failed after 3 runs.
 - **API:** `POST https://api.x.com/2/tweets`, OAuth 1.0a user context (the brand account's
   access token); the signer reproduces X's documented signature example. 429/401/5xx stop the
   run and retry later; 403 (duplicate or refused) gives up; other errors give up after 3 tries.
@@ -1183,7 +1192,7 @@ WHERE lockedUntil <= now`), atomic across instances and safe behind connection p
 | `refresh-prices`   | every 3 h at :07              | Per active retailer with price lookup: re-price listings with active deals first, then the least recently priced. Then run deal detection on them.                                                                   |
 | `detect-deals`     | hourly at :37                 | Deal detection for listings priced in the last 26 h (safety net if a chained run was missed).                                                                                                                        |
 | `expire-deals`     | hourly at :47                 | Re-check every active deal: expire it if the product was delisted, its `expiresAt` passed, its price hasn't been re-checked for 48 h, it no longer passes the deal engine, or its variant stopped being the default. |
-| `post-social`      | hourly at :27                 | Catch-up for posting to X (every detection pass already posts straight after notifying alerts). Only runs when the X keys are set.                                                                                   |
+| `post-social`      | hourly at :27                 | Catch-up for posting to X (detection passes already post right after notifying alerts): automatic posts with the X keys, otherwise "tap to tweet" pushes to editors when push is set up.                             |
 | `process-alerts`   | hourly at :52                 | Notify alerts matching deals published in the last 26 h (each alert/deal pair once). Publishing in the admin also matches that deal immediately; this is the catch-up.                                               |
 
 Because detection is chained after imports and refreshes, the pipeline still works on a

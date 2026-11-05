@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { socialConfigFromEnv } from "./config";
+import { shareSettingsFromEnv, socialConfigFromEnv } from "./config";
 
 const keys = {
   X_API_KEY: "k",
@@ -43,5 +43,19 @@ describe("socialConfigFromEnv", () => {
       socialConfigFromEnv({ ...keys, X_DAILY_POST_LIMIT: "9999", X_POST_MIN_LEVEL: "huge" }),
     ).toMatchObject({ dailyLimit: 10, minLevel: "BIG_DROP" });
     expect(socialConfigFromEnv({ ...keys, X_DAILY_POST_LIMIT: "0" })?.dailyLimit).toBe(0);
+  });
+});
+
+describe("shareSettingsFromEnv", () => {
+  it("works without X keys and reads the retailer link mode", () => {
+    expect(shareSettingsFromEnv({})).toEqual({
+      dailyLimit: 10,
+      minLevel: "BIG_DROP",
+      links: "deal-page",
+      siteUrl: "http://localhost:3000",
+    });
+    expect(shareSettingsFromEnv({ X_POST_LINKS: "retailer" }).links).toBe("retailer");
+    expect(shareSettingsFromEnv({ X_POST_LINKS: "Amazon" }).links).toBe("retailer");
+    expect(shareSettingsFromEnv({ X_POST_LINKS: "elsewhere" }).links).toBe("deal-page");
   });
 });

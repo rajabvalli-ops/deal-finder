@@ -10,6 +10,7 @@ import {
   type MatchSummary,
 } from "@/server/services/alerts/alert-matching.service";
 import { pushDeliveryFromEnv } from "@/server/services/alerts/push-delivery.service";
+import { sharePushFromEnv } from "@/server/social/share-push.service";
 import { socialPostingFromEnv, type SocialSummary } from "@/server/social/social-posting.service";
 import {
   createDealDetectionService,
@@ -83,8 +84,10 @@ export type JobReport =
       retailers?: RetailerOutcome[];
       deals?: Omit<DetectionSummary, "errors"> & { errors: number };
       alerts?: MatchSummary;
-      /** Absent when X isn't connected. */
+      /** Automatic X posts; absent when the X API keys aren't set. */
       social?: SocialSummary;
+      /** "Tap to tweet" pushes to editors; used when push is set up but X's API isn't. */
+      share?: SocialSummary;
     }
   | { job: JobName; status: "skipped"; reason: string };
 
@@ -110,19 +113,20 @@ function notifyAlerts(ctx: JobContext, settings: JobSettings): Promise<MatchSumm
   });
 }
 
-/** Posts newly published big drops and price errors to X, when X is connected. */
+/**
+ * Posts newly published big drops and price errors to X: automatically when the X API keys
+ * are set, otherwise as "tap to tweet" pushes to editors when push is set up.
+ */
 async function postToSocial(
   ctx: JobContext,
   settings: JobSettings,
-): Promise<{ social?: SocialSummary }> {
+): Promise<{ social?: SocialSummary; share?: SocialSummary }> {
+  const since = new Date(ctx.now.getTime() - settings.alertWindowMs);
   const social = socialPostingFromEnv(ctx.client, ctx.env);
-  if (!social) return {};
-  return {
-    social: await social.run({
-      now: ctx.now,
-      since: new Date(ctx.now.getTime() - settings.alertWindowMs),
-    }),
-  };
+  if (social) return { social: await social.run({ now: ctx.now, since }) };
+  const share = sharePushFromEnv(ctx.client, ctx.env);
+  if (share) return { share: await share.run({ now: ctx.now, since }) };
+  return {};
 }
 
 /** After a detection pass: notify alerts, then post to social. */

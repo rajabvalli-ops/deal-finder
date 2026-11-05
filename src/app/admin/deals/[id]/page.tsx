@@ -153,28 +153,48 @@ export default async function AdminDealPage({
         <h2 id="x-heading" className="text-lg font-semibold">
           X posts
         </h2>
-        {!detail.socialEnabled ? (
-          <p className="text-sm text-ink-muted">
-            Posting to X is off. Add the X API keys to the environment to post deals automatically.
-          </p>
-        ) : deal.status === "PUBLISHED" ? (
-          <form action={postDealToX}>
-            <input type="hidden" name="dealId" value={deal.id} />
-            <input type="hidden" name="returnTo" value={returnTo} />
-            <button
-              type="submit"
-              className="rounded-md border border-line px-4 py-2 font-medium hover:border-brand-600"
+        {deal.status === "PUBLISHED" ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <a
+              href={`/admin/deals/${deal.id}/tweet`}
+              target="_blank"
+              rel="noopener"
+              className="rounded-md bg-ink px-4 py-2 font-medium text-surface hover:opacity-90"
             >
-              Post to X now
-            </button>
-          </form>
+              Tweet this (opens X)
+            </a>
+            {detail.socialEnabled ? (
+              <form action={postDealToX}>
+                <input type="hidden" name="dealId" value={deal.id} />
+                <input type="hidden" name="returnTo" value={returnTo} />
+                <button
+                  type="submit"
+                  className="rounded-md border border-line px-4 py-2 font-medium hover:border-brand-600"
+                >
+                  Post to X automatically
+                </button>
+              </form>
+            ) : null}
+          </div>
         ) : null}
+        <p className="text-sm text-ink-muted">
+          {detail.socialEnabled
+            ? "Big drops and price errors are posted automatically through X's API."
+            : "Posting to X is manual: “Tweet this” opens X with the post written for you. With notifications on, editors get a “tap to tweet” alert for each big drop and price error."}
+        </p>
         {detail.socialPosts.length > 0 ? (
           <ul className="divide-y divide-line rounded-md border border-line text-sm">
             {detail.socialPosts.map((p) => (
               <li key={p.id} className="space-y-1 p-3">
                 <p>
-                  <strong>{humanise(p.status)}</strong> · {humanise(p.level)}
+                  <strong>
+                    {p.network === "x-share"
+                      ? p.status === "POSTED"
+                        ? "Sent to editors to tweet"
+                        : humanise(p.status)
+                      : humanise(p.status)}
+                  </strong>{" "}
+                  · {humanise(p.level)}
                   {p.postedAt ? ` · ${formatDateTime(p.postedAt)}` : ""}
                   {p.externalId ? (
                     <>

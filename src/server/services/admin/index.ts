@@ -5,7 +5,7 @@ import { createPriceHistoryRepository } from "@/server/db/repositories/price-his
 import { computePriceStats } from "@/server/pricing";
 import { AMAZON_ENV } from "@/server/retailers/adapters/amazon";
 import { createSocialPostRepository } from "@/server/db/repositories/social-post.repository";
-import { socialPostingFromEnv } from "@/server/social/social-posting.service";
+import { shareIntentForDeal, socialPostingFromEnv } from "@/server/social/social-posting.service";
 import { fail, ok, type AdminResult } from "./result";
 import { amazonConfigOf, createAdminCatalogueService } from "./admin-catalogue.service";
 import { createAdminDealsService } from "./admin-deals.service";
@@ -72,4 +72,9 @@ export async function postDealToSocial(dealId: string, now: Date): Promise<Admin
   if (deal.status !== "PUBLISHED") return fail("NOT_LIVE");
   const result = await social.postDeal({ dealId: deal.id, level: deal.level, now });
   return result.posted > 0 ? ok(undefined) : fail("SOCIAL_FAILED");
+}
+
+/** X's compose screen with this deal's post filled in ("tap to tweet"), or null if not live. */
+export function tweetIntentForDeal(dealId: string): Promise<string | null> {
+  return shareIntentForDeal(db, dealId, process.env);
 }

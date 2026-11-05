@@ -1,3 +1,4 @@
+import type { Prisma } from "@/generated/prisma/client";
 import type { DealLevel } from "@/generated/prisma/enums";
 import type { DbClient } from "../types";
 import { PUBLIC_DEAL_WHERE } from "./public.repository";
@@ -12,9 +13,21 @@ const dealForPost = {
   discountBps: true,
   level: true,
   status: true,
-  product: { select: { isActive: true } },
+  product: {
+    select: {
+      isActive: true,
+      // The product's outbound affiliate link (for "link straight to the retailer").
+      affiliateLinks: {
+        where: { dealId: null, isActive: true },
+        select: { destinationUrl: true },
+        take: 1,
+      },
+    },
+  },
   retailer: { select: { name: true, status: true } },
 } as const;
+
+export type DealForPost = Prisma.DealGetPayload<{ select: typeof dealForPost }>;
 
 export function createSocialPostRepository(client: DbClient) {
   return {
@@ -57,11 +70,15 @@ export function createSocialPostRepository(client: DbClient) {
       });
     },
 
+    findDeal(dealId: string): Promise<DealForPost | null> {
+      return client.deal.findUnique({ where: { id: dealId }, select: dealForPost });
+    },
+
     listForDeal(dealId: string) {
       return client.socialPost.findMany({ where: { dealId }, orderBy: { createdAt: "desc" } });
     },
 
-    markPosted(id: string, data: { text: string; externalId: string; at: Date }) {
+    markPosted(id: string, data: { text: string; externalId: string | null; at: Date }) {
       return client.socialPost.update({
         where: { id },
         data: {
