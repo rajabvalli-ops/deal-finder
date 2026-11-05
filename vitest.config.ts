@@ -26,6 +26,7 @@ export default defineConfig({
         "src/lib/validation/votes.ts",
         "src/lib/voucher-price.ts",
         "src/lib/comments.ts",
+        "src/lib/points.ts",
         "src/lib/validation/comments.ts",
         "src/lib/money.ts",
         "src/lib/outbound.ts",

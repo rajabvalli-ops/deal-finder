@@ -2,6 +2,7 @@ import "server-only";
 import { createVoteRepository, type VoteValue } from "@/server/db/repositories/vote.repository";
 import type { DbClient } from "@/server/db/types";
 import type { RateLimiter } from "@/server/rate-limit/rate-limiter";
+import type { PointsAwards } from "@/server/services/points/points.service";
 
 export type { VoteValue };
 
@@ -10,7 +11,10 @@ export type VoteResult =
   ({ ok: true } & VoteState) | { ok: false; error: "NOT_FOUND" | "RATE_LIMITED" };
 
 /** "Hot" / "cold" votes on public deals, one per signed-in user per deal. */
-export function createVotesService(client: DbClient, deps: { rateLimiter: RateLimiter }) {
+export function createVotesService(
+  client: DbClient,
+  deps: { rateLimiter: RateLimiter; points?: Pick<PointsAwards, "forVote"> },
+) {
   const votes = createVoteRepository(client);
 
   return {
@@ -25,6 +29,7 @@ export function createVotesService(client: DbClient, deps: { rateLimiter: RateLi
       const deal = await votes.findPublicDeal(params.slug);
       if (!deal) return { ok: false, error: "NOT_FOUND" };
       const score = await votes.setVote(params.userId, deal.id, params.value);
+      if (params.value !== 0) await deps.points?.forVote(params.userId, deal.id, params.now);
       return { ok: true, score, myVote: params.value };
     },
 

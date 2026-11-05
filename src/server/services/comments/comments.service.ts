@@ -7,6 +7,7 @@ import { PUBLIC_DEAL_WHERE } from "@/server/db/repositories/public.repository";
 import { inTransaction } from "@/server/db/transaction";
 import type { DbClient } from "@/server/db/types";
 import type { RateLimiter } from "@/server/rate-limit/rate-limiter";
+import type { PointsAwards } from "@/server/services/points/points.service";
 import { fail, ok, type Actor, type AdminResult } from "@/server/services/admin/result";
 
 /** Comments shown on a deal page. */
@@ -24,7 +25,10 @@ export type CommentView = {
 export type PostCommentResult = { ok: true } | { ok: false; error: "NOT_FOUND" | "RATE_LIMITED" };
 
 /** Comments on public deals by signed-in users; editors can hide them. */
-export function createCommentsService(client: DbClient, deps: { rateLimiter: RateLimiter }) {
+export function createCommentsService(
+  client: DbClient,
+  deps: { rateLimiter: RateLimiter; points?: Pick<PointsAwards, "forComment"> },
+) {
   const comments = createCommentRepository(client);
 
   const findPublicDeal = (slug: string) =>
@@ -41,12 +45,13 @@ export function createCommentsService(client: DbClient, deps: { rateLimiter: Rat
       if (!limit.allowed) return { ok: false, error: "RATE_LIMITED" };
       const deal = await findPublicDeal(params.slug);
       if (!deal) return { ok: false, error: "NOT_FOUND" };
-      await comments.create({
+      const comment = await comments.create({
         dealId: deal.id,
         userId: params.userId,
         body: params.body,
         createdAt: params.now,
       });
+      await deps.points?.forComment(params.userId, comment.id, params.now);
       return { ok: true };
     },
 

@@ -1106,6 +1106,19 @@ different `adapterConfig`.
   (audited, `hiddenAt` / `hiddenById` kept). Hidden comments disappear from the deal page at
   once.
 
+### Points and daily check-in (implemented in Stage 17e)
+
+- Signed-in users collect points on `/points` (linked as "⭐ Points" in the header): 10 for
+  checking in each UK day, plus 30 on every 7th day in a row; 1 the first time they vote on
+  each deal; 2 per comment, for up to 5 comments a day. Rules live in `src/lib/points.ts`.
+- `PointsEntry` is a ledger with a unique (user, reason, refKey) key — the UK day for a
+  check-in, the deal for a vote, the comment for a comment — so each award happens once even
+  when requests race; the balance is the sum. Votes and comments award points through an
+  optional dependency, so those services don't depend on points.
+- **Points have no cash value and can't be redeemed.** Deals Finder runs a monthly prize
+  draw for its points; that isn't built here, because a UK prize draw has legal requirements
+  (free entry route, terms, prize fulfilment) the owner has to decide on first.
+
 ### Search (implemented in Stage 12)
 
 `src/lib/validation/search.ts` (parsing), `src/server/db/repositories/search.repository.ts`
@@ -1498,6 +1511,7 @@ Each stage ends with passing tests and a summary; no stage starts without instru
 | 17b | Voting & Hot           | Hot / cold votes on deals, a Hot tab and homepage section                                                                                          |
 | 17c | Codes & freebies       | Voucher discounts, "price with code" on deals, "checked X ago" stamps, Freebie badge                                                               |
 | 17d | Comments               | Comments on deals by signed-in users, first names only, editor moderation                                                                          |
+| 17e | Points                 | Daily check-in with streaks, points for votes and comments (no cash value, no prize draw)                                                          |
 | 15  | SEO                    | Metadata, canonical, sitemap, robots, OpenGraph, breadcrumbs, JSON-LD                                                                              |
 | 16  | Hardening              | Analytics rollups, rate limiting live, a11y/perf budgets, security review, dependency upgrades                                                     |
 | 17  | Go live with Amazon    | First run against the real Creators API with your credentials; fix any field mapping differences                                                   |

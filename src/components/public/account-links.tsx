@@ -61,6 +61,11 @@ export function AccountLinks({ signOut }: { signOut: () => Promise<void> }) {
         </li>
       ) : null}
       <li>
+        <Link href="/points" className={link}>
+          ⭐ Points
+        </Link>
+      </li>
+      <li>
         <form action={signOut}>
           <button type="submit" className={link} title={`Signed in as ${session.email}`}>
             Sign out

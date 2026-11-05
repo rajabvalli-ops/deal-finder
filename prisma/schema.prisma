@@ -152,6 +152,7 @@ model User {
   dealVotes         DealVote[]
   comments          Comment[]          @relation("CommentAuthor")
   hiddenComments    Comment[]          @relation("CommentModerator")
+  points            PointsEntry[]
   clicks            Click[]
   reviewedDeals     Deal[]             @relation("DealReviewer")
   auditLogs         AuditLog[]
@@ -439,6 +440,31 @@ model Deal {
   @@index([retailerId, status])
   @@index([productId, status])
   @@index([variantId])
+}
+
+enum PointsReason {
+  CHECK_IN
+  VOTE
+  COMMENT
+}
+
+/// Points earned (no cash value). `refKey` makes each award happen once: the UK day for a
+/// check-in, the deal for a vote, the comment for a comment.
+model PointsEntry {
+  id        String       @id @default(cuid())
+  userId    String
+  reason    PointsReason
+  refKey    String
+  points    Int
+  /// UK calendar day earned ("YYYY-MM-DD"), for daily caps and streaks.
+  day       String
+  createdAt DateTime     @default(now()) @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, reason, refKey])
+  @@index([userId, createdAt])
+  @@index([userId, reason, day])
 }
 
 enum CommentStatus {
