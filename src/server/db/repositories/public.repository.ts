@@ -12,6 +12,22 @@ export const PUBLIC_DEAL_WHERE = {
 
 export const publicDealInclude = {
   retailer: { select: { slug: true, name: true } },
+  /** Switched-on codes for this deal that take something off ("£12.99 with code"). */
+  coupons: {
+    where: {
+      isActive: true,
+      code: { not: null },
+      OR: [{ discountPence: { not: null } }, { discountBps: { not: null } }],
+    },
+    select: {
+      code: true,
+      discountPence: true,
+      discountBps: true,
+      minSpendPence: true,
+      validFrom: true,
+      validUntil: true,
+    },
+  },
   product: {
     select: {
       brand: true,

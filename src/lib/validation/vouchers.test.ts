@@ -12,6 +12,8 @@ describe("voucherFormSchema", () => {
         terms: "Min spend £20",
         validUntil: "2026-12-01T23:59",
         deal: "glass-kettle-abc123",
+        discount: "£5.50",
+        minSpend: "20",
       }),
     ).toEqual({
       retailerId: "r1",
@@ -21,7 +23,21 @@ describe("voucherFormSchema", () => {
       terms: "Min spend £20",
       validUntil: new Date("2026-12-01T23:59Z"),
       deal: "glass-kettle-abc123",
+      discountPence: 550,
+      discountBps: null,
+      minSpendPence: 2000,
     });
+  });
+
+  it.each([
+    ["10%", { discountPence: null, discountBps: 1000 }],
+    ["12.5 %", { discountPence: null, discountBps: 1250 }],
+    ["100%", { discountPence: null, discountBps: 10_000 }],
+    ["5", { discountPence: 500, discountBps: null }],
+  ])("reads the discount %s", (discount, expected) => {
+    expect(voucherFormSchema.parse({ retailerId: "r1", title: "Offer", discount })).toMatchObject(
+      expected,
+    );
   });
 
   it("allows offers without a code, end date or deal", () => {
@@ -33,6 +49,9 @@ describe("voucherFormSchema", () => {
       terms: null,
       validUntil: null,
       deal: null,
+      discountPence: null,
+      discountBps: null,
+      minSpendPence: null,
     });
   });
 
@@ -44,6 +63,12 @@ describe("voucherFormSchema", () => {
     { validUntil: "someday" },
     { deal: "../admin" },
     { description: "x".repeat(501) },
+    { discount: "0" },
+    { discount: "0%" },
+    { discount: "101%" },
+    { discount: "five pounds" },
+    { minSpend: "0" },
+    { minSpend: "lots" },
   ])("rejects %j", (change) => {
     expect(
       voucherFormSchema.safeParse({ retailerId: "r1", title: "Offer", ...change }).success,

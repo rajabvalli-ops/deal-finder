@@ -3,6 +3,7 @@ import { DEAL_LEVEL_LABELS } from "@/lib/alerts";
 import { formatVotes } from "@/lib/hot";
 import { formatBps, formatPrice } from "@/lib/money";
 import { isAtHistoricalLow, type PublicDealSummary } from "@/lib/public-types";
+import { isFreebie, WithCode } from "./price-block";
 import { ProductImage } from "./product-image";
 
 export function DealCard({ deal }: { deal: PublicDealSummary }) {
@@ -17,7 +18,7 @@ export function DealCard({ deal }: { deal: PublicDealSummary }) {
           <span className="rounded-md bg-saving-600 px-2 py-0.5 text-sm font-bold text-white">
             −{formatBps(deal.discountBps)}
           </span>
-          <LevelBadge level={deal.level} />
+          <LevelBadge level={deal.level} free={isFreebie(deal)} />
         </span>
         {isAtHistoricalLow(deal) ? (
           <span className="absolute top-2 right-2 rounded-md bg-surface px-2 py-0.5 text-xs font-semibold text-ink shadow">
@@ -48,14 +49,28 @@ export function DealCard({ deal }: { deal: PublicDealSummary }) {
           ) : null}
           <p className="text-lg font-bold tabular-nums sm:text-xl">{formatPrice(deal.dealPrice)}</p>
           <p className="text-sm text-ink-muted">Save {formatPrice(deal.savingAmount)}</p>
+          <WithCode deal={deal} />
         </div>
       </div>
     </article>
   );
 }
 
-/** "Big drop" / "Possible price error" label; nothing for ordinary deals. */
-export function LevelBadge({ level }: { level: PublicDealSummary["level"] }) {
+/** "Freebie" / "Possible price error" / "Big drop" label; nothing for ordinary deals. */
+export function LevelBadge({
+  level,
+  free = false,
+}: {
+  level: PublicDealSummary["level"];
+  free?: boolean;
+}) {
+  if (free) {
+    return (
+      <span className="rounded-md bg-lime-400 px-2 py-0.5 text-xs font-bold text-black">
+        Freebie
+      </span>
+    );
+  }
   const label = DEAL_LEVEL_LABELS[level];
   if (!label) return null;
   return (

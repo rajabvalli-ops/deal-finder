@@ -9,6 +9,10 @@ export type CouponCreate = {
   description: string | null;
   terms: string | null;
   validUntil: Date | null;
+  discountPence: number | null;
+  discountBps: number | null;
+  minSpendPence: number | null;
+  lastCheckedAt: Date | null;
 };
 
 const publicInclude = {
@@ -49,6 +53,10 @@ export function createCouponRepository(client: DbClient) {
 
     setActive(id: string, isActive: boolean) {
       return client.coupon.update({ where: { id }, data: { isActive } });
+    },
+
+    markChecked(id: string, at: Date) {
+      return client.coupon.update({ where: { id }, data: { lastCheckedAt: at } });
     },
 
     delete(id: string) {

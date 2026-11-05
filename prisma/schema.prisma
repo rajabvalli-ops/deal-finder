@@ -454,19 +454,26 @@ model DealVote {
 }
 
 model Coupon {
-  id          String    @id @default(cuid())
-  retailerId  String
-  dealId      String?
+  id            String    @id @default(cuid())
+  retailerId    String
+  dealId        String?
   /// Null for offers that need no code.
-  code        String?
-  title       String
-  description String?
-  terms       String?   @db.Text
-  validFrom   DateTime? @db.Timestamptz(3)
-  validUntil  DateTime? @db.Timestamptz(3)
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
+  code          String?
+  title         String
+  description   String?
+  terms         String?   @db.Text
+  validFrom     DateTime? @db.Timestamptz(3)
+  validUntil    DateTime? @db.Timestamptz(3)
+  isActive      Boolean   @default(true)
+  /// Fixed amount off (pence) or percentage off (bps), at most one; both null = not stated.
+  discountPence Int?
+  discountBps   Int?
+  /// The basket must be at least this much (pence).
+  minSpendPence Int?
+  /// When an editor last confirmed the code works ("checked 2 hours ago").
+  lastCheckedAt DateTime? @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @db.Timestamptz(3)
 
   retailer Retailer @relation(fields: [retailerId], references: [id], onDelete: Cascade)
   deal     Deal?    @relation(fields: [dealId], references: [id], onDelete: SetNull)

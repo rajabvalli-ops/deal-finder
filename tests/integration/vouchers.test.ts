@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { pageRequest } from "@/lib/pagination";
 import { voucherFormSchema } from "@/lib/validation/vouchers";
+import { createPublicCatalogueService } from "@/server/services/public/public-catalogue.service";
 import { createMemoryRateLimiter } from "@/server/rate-limit/rate-limiter";
 import { createReportsService } from "@/server/services/reports/reports.service";
 import { createVouchersService } from "@/server/services/vouchers/vouchers.service";
@@ -281,5 +283,61 @@ describe("reports", () => {
         },
       }),
     ).rejects.toThrow(/Report_one_target/);
+  });
+});
+
+describe("voucher discounts", () => {
+  it("stores the discount and when it was checked, and shows the price with the code", async () => {
+    const live = await createLiveDeal(NOW, "Coded Kettle", { price: 4000 });
+    const fiver = await addVoucher(live.retailer.id, {
+      code: "FIVER",
+      deal: live.deal.slug,
+      discount: "£5",
+    });
+    await addVoucher(live.retailer.id, { code: "TENPC", deal: live.deal.slug, discount: "10%" });
+    await addVoucher(live.retailer.id, {
+      code: "BIGSPEND",
+      deal: live.deal.slug,
+      discount: "£30",
+      minSpend: "50",
+    });
+    expect(fiver).toMatchObject({ discountPence: 500, discountBps: null, lastCheckedAt: NOW });
+
+    const catalogue = createPublicCatalogueService(testDb);
+    const summary = async () =>
+      (await catalogue.listDeals({ sort: "newest", page: pageRequest(undefined, 10) })).items[0];
+    expect((await summary())?.withCode).toEqual({ price: 3500, code: "FIVER" });
+
+    // Switched off (or ended): its price no longer shows.
+    await testDb.coupon.update({ where: { id: fiver.id }, data: { isActive: false } });
+    expect((await summary())?.withCode).toEqual({ price: 3600, code: "TENPC" });
+    await testDb.coupon.updateMany({ data: { validUntil: new Date(Date.now() - 1000) } });
+    expect((await summary())?.withCode).toBeNull();
+  });
+
+  it("lets an editor mark a voucher as still working", async () => {
+    const shop = await createRetailer();
+    const voucher = await addVoucher(shop.id);
+    const later = new Date(NOW.getTime() + DAY);
+    expect(
+      await service.change({
+        actor: await editor(),
+        couponId: voucher.id,
+        action: "checked",
+        now: later,
+      }),
+    ).toEqual({ ok: true, value: undefined });
+    expect((await service.listLive(later))[0]?.lastCheckedAt).toEqual(later);
+  });
+
+  it("rejects two kinds of discount at once in the database", async () => {
+    const shop = await createRetailer();
+    const voucher = await addVoucher(shop.id);
+    await expect(
+      testDb.coupon.update({
+        where: { id: voucher.id },
+        data: { discountPence: 500, discountBps: 1000 },
+      }),
+    ).rejects.toThrow();
   });
 });

@@ -26,6 +26,7 @@ test("an editor adds a voucher for a deal; visitors copy it and can report it", 
   await page.getByLabel("Code (leave empty if none is needed)").fill(code.toLowerCase());
   await page.getByLabel("Headline").fill("Extra 10% off this kettle");
   await page.getByLabel("Only for this deal (slug, optional)").fill(fixture.slug);
+  await page.getByLabel("Discount (e.g. £5 or 10%, optional)").fill("10%");
   await page.getByRole("button", { name: "Add voucher" }).click();
   await expect(page.getByRole("status")).toHaveText("Created.");
   await expect(page.getByText(code, { exact: true })).toBeVisible();
@@ -38,6 +39,8 @@ test("an editor adds a voucher for a deal; visitors copy it and can report it", 
   await expect(visitor.getByRole("heading", { level: 1, name: "Voucher codes" })).toBeVisible();
   const card = visitor.getByRole("article").filter({ hasText: code });
   await expect(card.getByText("Extra 10% off this kettle")).toBeVisible();
+  await expect(card.getByText("10% off", { exact: true })).toBeVisible();
+  await expect(card.getByText(/✓ Checked (just now|1 minute ago)/)).toBeVisible();
   await card.getByRole("button", { name: `Copy code ${code}` }).click();
   await expect(card.getByRole("button", { name: `Copy code ${code}` })).toHaveText("Copied ✓");
   expect(await visitor.evaluate(() => navigator.clipboard.readText())).toBe(code);
@@ -46,6 +49,7 @@ test("an editor adds a voucher for a deal; visitors copy it and can report it", 
   await card.getByRole("link", { name: "See the deal →" }).click();
   await expect(visitor).toHaveURL(`/deals/${fixture.slug}`);
   await expect(visitor.getByRole("heading", { name: "Save more with this code" })).toBeVisible();
+  await expect(visitor.getByText(new RegExp(`^£[\\d.,]+ with code ${code}$`))).toBeVisible();
 
   const dealReport = visitor.locator("details").filter({ hasText: "Report a problem" }).last();
   await dealReport.getByText("Report a problem").click();

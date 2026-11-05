@@ -24,6 +24,7 @@ export default defineConfig({
         "src/lib/quiet-hours.ts",
         "src/lib/hot.ts",
         "src/lib/validation/votes.ts",
+        "src/lib/voucher-price.ts",
         "src/lib/money.ts",
         "src/lib/outbound.ts",
         "src/lib/slug.ts",

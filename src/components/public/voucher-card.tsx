@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { formatDate } from "@/lib/format";
+import { formatVoucherDiscount, timeAgo } from "@/lib/voucher-price";
 import { REPORT_REASONS } from "@/lib/validation/vouchers";
 import { reportProblem } from "@/app/(public)/report-actions";
 import { CopyCode } from "./copy-code";
@@ -12,6 +13,10 @@ export type VoucherCardData = {
   description: string | null;
   terms: string | null;
   validUntil: Date | null;
+  discountPence: number | null;
+  discountBps: number | null;
+  minSpendPence: number | null;
+  lastCheckedAt: Date | null;
   retailer: { slug: string; name: string };
   dealSlug: string | null;
 };
@@ -27,6 +32,7 @@ export function VoucherCard({
   now: Date;
   showDealLink?: boolean;
 }) {
+  const discount = formatVoucherDiscount(voucher);
   const endingSoon =
     voucher.validUntil !== null && voucher.validUntil.getTime() - now.getTime() < ENDING_SOON_MS;
   return (
@@ -42,6 +48,11 @@ export function VoucherCard({
         ) : null}
       </div>
       <h3 className="font-semibold">{voucher.title}</h3>
+      {discount ? (
+        <p className="w-fit rounded-md bg-lime-400 px-2 py-0.5 text-sm font-bold text-black">
+          {discount}
+        </p>
+      ) : null}
       {voucher.code ? (
         <CopyCode code={voucher.code} />
       ) : (
@@ -50,6 +61,7 @@ export function VoucherCard({
       {voucher.description ? <p className="text-sm">{voucher.description}</p> : null}
       <p className="text-xs text-ink-muted">
         {voucher.validUntil ? `Ends ${formatDate(voucher.validUntil)}` : "No end date given"}
+        {voucher.lastCheckedAt ? ` · ✓ Checked ${timeAgo(voucher.lastCheckedAt, now)}` : ""}
       </p>
       {voucher.terms ? (
         <details className="text-xs text-ink-muted">

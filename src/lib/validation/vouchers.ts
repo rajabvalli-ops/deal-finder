@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { idSchema, optionalDateTime } from "./admin";
+import { parsePounds } from "./search";
 
 // Voucher codes (admin form) and "report a problem" (public form).
 
@@ -14,7 +15,39 @@ const optionalText = (max: number) =>
     .transform((v) => (v === "" ? null : v))
     .prefault("");
 
-export const voucherFormSchema = z.object({
+/** "£5", "5.50" (pounds off) or "10%", "12.5%" (percent off); "" = not stated. */
+const discount = z
+  .string()
+  .trim()
+  .transform((v, ctx) => {
+    if (v === "") return { discountPence: null, discountBps: null };
+    const percent = /^(\d{1,3})(?:\.(\d{1,2}))?\s*%$/.exec(v);
+    if (percent) {
+      const bps = Number(percent[1]) * 100 + Number((percent[2] ?? "").padEnd(2, "0"));
+      if (bps >= 1 && bps <= 10_000) return { discountPence: null, discountBps: bps };
+    } else {
+      const pence = parsePounds(v);
+      if (pence !== null && pence > 0) return { discountPence: pence, discountBps: null };
+    }
+    ctx.addIssue({ code: "custom", message: "Enter an amount like £5 or a percentage like 10%" });
+    return z.NEVER;
+  })
+  .prefault("");
+
+/** Pounds, e.g. "20" or "£20"; "" = no minimum. */
+const minSpend = z
+  .string()
+  .trim()
+  .transform((v, ctx) => {
+    if (v === "") return null;
+    const pence = parsePounds(v);
+    if (pence !== null && pence > 0) return pence;
+    ctx.addIssue({ code: "custom", message: "Enter an amount like 20" });
+    return z.NEVER;
+  })
+  .prefault("");
+
+const voucherFields = z.object({
   retailerId: idSchema,
   /** Optional: some offers need no code ("10% off automatically at checkout"). */
   code: z
@@ -35,13 +68,22 @@ export const voucherFormSchema = z.object({
     .refine((v) => v === "" || /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(v))
     .transform((v) => (v === "" ? null : v))
     .prefault(""),
+  discount,
+  minSpend,
 });
+
+export const voucherFormSchema = voucherFields.transform(({ discount, minSpend, ...rest }) => ({
+  ...rest,
+  ...discount,
+  minSpendPence: minSpend,
+}));
 
 export type VoucherInput = z.output<typeof voucherFormSchema>;
 
 export const voucherActionSchema = z.object({
   couponId: idSchema,
-  action: z.enum(["deactivate", "activate", "delete"]),
+  /** "checked": an editor confirmed the code still works. */
+  action: z.enum(["deactivate", "activate", "checked", "delete"]),
 });
 
 export const REPORT_REASONS = {

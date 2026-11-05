@@ -21,6 +21,8 @@ export type PublicDealSummary = {
   discountBps: number;
   historicalLow: number | null;
   level: DealLevel;
+  /** The lowest price with one of this deal's voucher codes, or null. */
+  withCode: { price: number; code: string } | null;
   /** Hot (+1) minus cold (-1) votes. */
   voteScore: number;
   /** When the listing's price was last checked. */

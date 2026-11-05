@@ -5,7 +5,7 @@ import { AffiliateDisclosure } from "@/components/public/affiliate-disclosure";
 import { Breadcrumbs, type Crumb } from "@/components/public/breadcrumbs";
 import { DealGrid, LevelBadge } from "@/components/public/deal-card";
 import { OutboundButton } from "@/components/public/outbound-button";
-import { PriceBlock } from "@/components/public/price-block";
+import { isFreebie, PriceBlock } from "@/components/public/price-block";
 import { ProductImage } from "@/components/public/product-image";
 import { PriceChart } from "@/components/ui/price-chart";
 import { formatDate, formatDateTime, humanise } from "@/lib/format";
@@ -89,7 +89,7 @@ export default async function DealPage({ params }: Props) {
                 vote={voteOnDeal}
                 state={dealVoteState}
               />
-              <LevelBadge level={deal.level} />
+              <LevelBadge level={deal.level} free={isFreebie(deal)} />
             </div>
           </div>
 

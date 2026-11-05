@@ -1074,6 +1074,24 @@ different `adapterConfig`.
 - **Where:** a "🔥 Hot" sort on deal lists (`/deals?sort=hot`, categories, retailers) and a
   "🔥 Hot right now" homepage section showing voted-up deals (hidden until someone votes).
 
+### Price with a code, checked stamps and freebies (implemented in Stage 17c)
+
+- **Voucher discounts:** an editor can enter what a voucher takes off ("£5" or "10%",
+  stored as `Coupon.discountPence` or `discountBps`, never both) and a minimum spend
+  (`minSpendPence`); a CHECK constraint enforces this. Voucher cards show it ("10% off",
+  "£5.00 off £30.00+").
+- **"£12.99 with code SAVE10":** for each deal, the lowest price any of its own switched-on,
+  current vouchers with a code gives (`bestPriceWithCode` in `src/lib/voucher-price.ts`) is
+  shown on deal cards and the deal page. Only vouchers tied to that deal count, since
+  retailer-wide codes often exclude products. Vouchers below their minimum spend are ignored.
+- **"✓ Checked 2 hours ago":** `Coupon.lastCheckedAt` is set when a voucher is added and
+  whenever an editor presses "Still works" in the admin. Cards show the time since; pages are
+  cached, so it is as of the last render (within minutes).
+- **Freebies:** a deal that is free, outright or with a code, gets a "Freebie" badge in place
+  of its level badge.
+- Not copied: "resale" deals (profit on resale) would need resale price data we don't have,
+  and labelling deals with made-up resale profits would mislead.
+
 ### Search (implemented in Stage 12)
 
 `src/lib/validation/search.ts` (parsing), `src/server/db/repositories/search.repository.ts`
@@ -1464,6 +1482,7 @@ Each stage ends with passing tests and a summary; no stage starts without instru
 | 16  | Vouchers & reports     | Voucher codes (admin, `/vouchers`, on deal pages) and "report a problem" with auto-hide for vouchers                                               |
 | 17a | Alerts without account | Price error / big drop push alerts with no account, per-device quiet hours                                                                         |
 | 17b | Voting & Hot           | Hot / cold votes on deals, a Hot tab and homepage section                                                                                          |
+| 17c | Codes & freebies       | Voucher discounts, "price with code" on deals, "checked X ago" stamps, Freebie badge                                                               |
 | 15  | SEO                    | Metadata, canonical, sitemap, robots, OpenGraph, breadcrumbs, JSON-LD                                                                              |
 | 16  | Hardening              | Analytics rollups, rate limiting live, a11y/perf budgets, security review, dependency upgrades                                                     |
 | 17  | Go live with Amazon    | First run against the real Creators API with your credentials; fix any field mapping differences                                                   |

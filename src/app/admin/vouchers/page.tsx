@@ -1,4 +1,5 @@
 import { formatDateTime } from "@/lib/format";
+import { formatVoucherDiscount, timeAgo } from "@/lib/voucher-price";
 import { adminReads } from "@/server/services/admin";
 import { vouchers } from "@/server/services/vouchers";
 import { ActionMessages } from "../_lib/messages";
@@ -63,6 +64,14 @@ export default async function AdminVouchersPage({ searchParams }: { searchParams
             <input name="description" maxLength={500} className={field} />
           </label>
           <label className="block">
+            Discount (e.g. £5 or 10%, optional)
+            <input name="discount" maxLength={12} placeholder="10%" className={field} />
+          </label>
+          <label className="block">
+            Minimum spend in £ (optional)
+            <input name="minSpend" maxLength={10} inputMode="decimal" className={field} />
+          </label>
+          <label className="block">
             Ends (UTC, optional)
             <input name="validUntil" type="datetime-local" className={field} />
           </label>
@@ -116,6 +125,14 @@ export default async function AdminVouchersPage({ searchParams }: { searchParams
                       <td className="py-2 pr-4">
                         <span className="font-mono font-bold">{c.code ?? "No code"}</span>
                         <span className="block">{c.title}</span>
+                        {formatVoucherDiscount(c) ? (
+                          <span className="block text-xs">{formatVoucherDiscount(c)}</span>
+                        ) : null}
+                        <span className="block text-xs text-ink-muted">
+                          {c.lastCheckedAt
+                            ? `Checked ${timeAgo(c.lastCheckedAt, now)}`
+                            : "Never checked"}
+                        </span>
                         {c.deal ? (
                           <a
                             href={`/admin/deals/${c.deal.id}`}
@@ -153,6 +170,19 @@ export default async function AdminVouchersPage({ searchParams }: { searchParams
                               {c.isActive ? "Switch off" : "Switch on"}
                             </button>
                           </form>
+                          {c.isActive ? (
+                            <form action={voucherAction}>
+                              <input type="hidden" name="couponId" value={c.id} />
+                              <input type="hidden" name="action" value="checked" />
+                              <button
+                                type="submit"
+                                className={button}
+                                aria-label={`Mark voucher ${c.code ?? c.title} as checked`}
+                              >
+                                Still works
+                              </button>
+                            </form>
+                          ) : null}
                           <form action={voucherAction}>
                             <input type="hidden" name="couponId" value={c.id} />
                             <input type="hidden" name="action" value="delete" />

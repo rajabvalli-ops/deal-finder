@@ -15,12 +15,23 @@ import {
   type PublicDealRow,
 } from "@/server/db/repositories/public.repository";
 import type { DbClient } from "@/server/db/types";
+import { bestPriceWithCode } from "@/lib/voucher-price";
 import { computePriceStats } from "@/server/pricing";
 
 const DAY_MS = 86_400_000;
 const CHART_DAYS = 180;
 
+/** Codes that have started and not ended at `now`. */
+function liveCoupons(row: PublicDealRow, now: Date) {
+  return row.coupons.filter(
+    (c) =>
+      (c.validFrom === null || c.validFrom <= now) && (c.validUntil === null || c.validUntil > now),
+  );
+}
+
+/** Cached pages render this, so "live" vouchers are as of the last render (minutes). */
 export function toSummary(row: PublicDealRow): PublicDealSummary {
+  const now = new Date();
   const category = row.product.category;
   return {
     slug: row.slug,
@@ -36,6 +47,7 @@ export function toSummary(row: PublicDealRow): PublicDealSummary {
     discountBps: row.discountBps,
     historicalLow: row.historicalLow,
     level: row.level,
+    withCode: bestPriceWithCode(row.dealPrice, liveCoupons(row, now)),
     voteScore: row.voteScore,
     priceCheckedAt: row.product.priceUpdatedAt,
     publishedAt: row.publishedAt,

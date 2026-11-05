@@ -19,6 +19,11 @@ export type VoucherView = {
   description: string | null;
   terms: string | null;
   validUntil: Date | null;
+  discountPence: number | null;
+  discountBps: number | null;
+  minSpendPence: number | null;
+  /** When an editor last confirmed it works. */
+  lastCheckedAt: Date | null;
   retailer: { slug: string; name: string };
   /** The deal it belongs to, while that deal is live. */
   dealSlug: string | null;
@@ -35,6 +40,10 @@ function toView(row: PublicCouponRow): VoucherView {
     description: row.description,
     terms: row.terms,
     validUntil: row.validUntil,
+    discountPence: row.discountPence,
+    discountBps: row.discountBps,
+    minSpendPence: row.minSpendPence,
+    lastCheckedAt: row.lastCheckedAt,
     retailer: row.retailer,
     dealSlug: live ? deal.slug : null,
   };
@@ -78,6 +87,11 @@ export function createVouchersService(client: DbClient) {
           description: input.description,
           terms: input.terms,
           validUntil: input.validUntil,
+          discountPence: input.discountPence,
+          discountBps: input.discountBps,
+          minSpendPence: input.minSpendPence,
+          // Added by an editor who has just checked it.
+          lastCheckedAt: now,
         });
         await createAuditLogRepository(tx).record({
           actorId: actor.id,
@@ -91,11 +105,14 @@ export function createVouchersService(client: DbClient) {
       });
     },
 
-    /** Switch a voucher off or on, or delete it. Closes its open reports. EDITOR+; audited. */
+    /**
+     * Switch a voucher off or on, mark it checked, or delete it. Switching off closes its open
+     * reports. EDITOR+; audited.
+     */
     change(params: {
       actor: Actor;
       couponId: string;
-      action: "deactivate" | "activate" | "delete";
+      action: "deactivate" | "activate" | "checked" | "delete";
       now: Date;
     }): Promise<AdminResult> {
       const { actor, couponId, action, now } = params;
@@ -114,6 +131,10 @@ export function createVouchersService(client: DbClient) {
         });
         if (action === "delete") {
           await repo.delete(coupon.id);
+          return ok(undefined);
+        }
+        if (action === "checked") {
+          await repo.markChecked(coupon.id, now);
           return ok(undefined);
         }
         await repo.setActive(coupon.id, action === "activate");
