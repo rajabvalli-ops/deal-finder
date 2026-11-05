@@ -1,5 +1,6 @@
 import "server-only";
 import type { DealLevel } from "@/lib/public-types";
+import { isQuietHour } from "@/lib/quiet-hours";
 import { createPushSubscriptionRepository } from "@/server/db/repositories/push-subscription.repository";
 import type { DbClient } from "@/server/db/types";
 import {
@@ -32,7 +33,10 @@ export function createPushDelivery(client: DbClient, sender: PushSender) {
   return {
     async deliver(notices: PushNotice[], now: Date): Promise<{ pushed: number; failed: number }> {
       if (notices.length === 0) return { pushed: 0, failed: 0 };
-      const targets = await subscriptions.listForUsers([...new Set(notices.map((n) => n.userId))]);
+      // Devices in their quiet hours are left out: these alerts are too time-sensitive to queue.
+      const targets = (
+        await subscriptions.listForUsers([...new Set(notices.map((n) => n.userId))])
+      ).filter((t) => !isQuietHour(t, now));
       const jobs = notices.flatMap((notice) =>
         targets
           .filter((t) => t.userId === notice.userId)

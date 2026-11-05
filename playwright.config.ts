@@ -33,6 +33,12 @@ export default defineConfig({
           NEXT_PUBLIC_SITE_URL: baseURL,
           BETTER_AUTH_SECRET:
             process.env.BETTER_AUTH_SECRET ?? "e2e-only-auth-secret-0123456789abcdef",
+          // A key pair made for the e2e run only, so the push controls render. Nothing is sent:
+          // no browser in the tests subscribes.
+          VAPID_PUBLIC_KEY:
+            "BDGxPl9cf5B6msMj0JVQmVR7YfJUMqkbhiYaPm6b1FFP1mjOtFEpcn0ww0Rlen-OZ0-oI0u0jlzq-Q_yQB1n3_Y",
+          VAPID_PRIVATE_KEY: "H9MOGE1FDC4DLEZtWh3b_bLY835uwYJbZ2JnedcRrhs",
+          VAPID_SUBJECT: "mailto:e2e@example.test",
         },
       },
 });

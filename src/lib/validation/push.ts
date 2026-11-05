@@ -41,3 +41,38 @@ export type PushSubscriptionInput = z.infer<typeof pushSubscriptionSchema>;
 export const pushEndpointSchema = z.object({
   endpoint: z.string().max(2048),
 });
+
+/** What a device follows without an account: "" = only the owner's own alerts. */
+const broadcastLevel = z
+  .enum(["", "price-error", "big-drop"])
+  .transform((v) => (v === "" ? null : v === "price-error" ? "PRICE_ERROR" : "BIG_DROP"));
+
+const hour = z
+  .string()
+  .regex(/^(|[01]?\d|2[0-3])$/)
+  .transform((v) => (v === "" ? null : Number(v)));
+
+export const deviceSignupSchema = z.object({
+  subscription: pushSubscriptionSchema,
+  level: broadcastLevel,
+});
+
+export const deviceSettingsSchema = z
+  .object({
+    endpoint: z.string().max(2048),
+    level: broadcastLevel,
+    quietStart: hour,
+    quietEnd: hour,
+  })
+  .transform((s) => {
+    // Both hours or neither; an empty window means no quiet hours.
+    const quiet = s.quietStart !== null && s.quietEnd !== null && s.quietStart !== s.quietEnd;
+    return {
+      endpoint: s.endpoint,
+      broadcastLevel: s.level as "PRICE_ERROR" | "BIG_DROP" | null,
+      quietStartHour: quiet ? s.quietStart : null,
+      quietEndHour: quiet ? s.quietEnd : null,
+    };
+  });
+
+export type DeviceSettingsInput = z.output<typeof deviceSettingsSchema>;

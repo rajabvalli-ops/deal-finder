@@ -21,6 +21,7 @@ export default defineConfig({
       include: [
         "src/lib/alerts.ts",
         "src/lib/social.ts",
+        "src/lib/quiet-hours.ts",
         "src/lib/money.ts",
         "src/lib/outbound.ts",
         "src/lib/slug.ts",

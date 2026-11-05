@@ -12,21 +12,10 @@ import {
   type SearchFilters,
 } from "@/lib/validation/search";
 import { getCurrentUser } from "@/server/auth";
-import { PushToggle } from "@/components/public/push-toggle";
-import {
-  ALERT_ERROR_MESSAGES,
-  alerts,
-  pushPublicKey,
-  type AlertErrorCode,
-} from "@/server/services/alerts";
+import { ALERT_ERROR_MESSAGES, alerts, type AlertErrorCode } from "@/server/services/alerts";
 import { publicSearch } from "@/server/services/public";
-import {
-  alertAction,
-  createAlert,
-  notificationAction,
-  removePushSubscription,
-  savePushSubscription,
-} from "./actions";
+import { alertAction, createAlert, notificationAction } from "./actions";
+import { DeviceAlertsBox } from "../device-alerts-box";
 
 export const metadata: Metadata = {
   title: "Price alerts",
@@ -222,6 +211,7 @@ export default async function AlertsPage({ searchParams }: Props) {
     return (
       <div className="space-y-6">
         {header}
+        <DeviceAlertsBox />
         <div className="space-y-4 rounded-lg border border-line p-6">
           <p>Sign in to create price alerts and see your notifications.</p>
           <p className="flex flex-wrap items-center gap-4">
@@ -244,7 +234,6 @@ export default async function AlertsPage({ searchParams }: Props) {
     alerts.list(user.id),
     alerts.notifications(user.id),
   ]);
-  const publicKey = pushPublicKey();
 
   return (
     <div className="space-y-8">
@@ -265,15 +254,7 @@ export default async function AlertsPage({ searchParams }: Props) {
             </form>
           ) : null}
         </div>
-        {publicKey ? (
-          <div className="rounded-lg border border-line p-3">
-            <PushToggle
-              publicKey={publicKey}
-              save={savePushSubscription}
-              remove={removePushSubscription}
-            />
-          </div>
-        ) : null}
+        <DeviceAlertsBox signedIn title={null} />
         {notifications.items.length === 0 ? (
           <p className="text-ink-muted">
             No notifications yet. When a new deal matches one of your alerts, it appears here.

@@ -64,8 +64,9 @@ notifications enabled on your phone while signed in as an editor or admin, you a
 ### Turning on push notifications
 
 Run `npm run push:keys`, set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT`
-(a `mailto:` address), and redeploy. Users then see "Turn on notifications on this device"
-on `/alerts`. On iPhone, push works for sites added to the Home Screen (iOS 16.4+).
+(a `mailto:` address), and redeploy. Visitors then see "Get price error alerts — no account
+needed" on the homepage, `/price-drops` and `/alerts`, with quiet hours per device; signed-in
+users also get their own alerts on that device. On iPhone, push works for sites added to the Home Screen (iOS 16.4+).
 
 ## Requirements
 

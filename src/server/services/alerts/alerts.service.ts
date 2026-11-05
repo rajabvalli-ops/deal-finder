@@ -8,7 +8,7 @@ import {
 } from "@/server/db/repositories/notification.repository";
 import { createPublicRepository } from "@/server/db/repositories/public.repository";
 import { createPushSubscriptionRepository } from "@/server/db/repositories/push-subscription.repository";
-import type { PushSubscriptionInput } from "@/lib/validation/push";
+import type { DeviceSettingsInput, PushSubscriptionInput } from "@/lib/validation/push";
 import type { DbClient } from "@/server/db/types";
 
 export type AlertErrorCode =
@@ -154,19 +154,62 @@ export function createAlertsService(client: DbClient) {
       return { items: rows.map(toNotificationView), unread };
     },
 
-    /** Turns on push for this browser (its subscription moves to this account if it had another). */
+    /**
+     * Turns on push for this browser. Signed in, it becomes the user's device (moving from
+     * another account if need be); without an account it must follow a level of deals.
+     * `level` undefined keeps what the device already follows.
+     */
     async savePushSubscription(
-      userId: string,
+      userId: string | null,
       subscription: PushSubscriptionInput,
       userAgent: string | null,
-    ): Promise<void> {
+      level?: "PRICE_ERROR" | "BIG_DROP" | null,
+    ): Promise<{ ok: true } | { ok: false; error: "NOTHING_TO_FOLLOW" }> {
+      if (!userId && !level) return { ok: false, error: "NOTHING_TO_FOLLOW" };
       await pushSubscriptions.save({
         userId,
         endpoint: subscription.endpoint,
         p256dh: subscription.keys.p256dh,
         auth: subscription.keys.auth,
         userAgent: userAgent?.slice(0, 300) ?? null,
+        broadcastLevel: level,
       });
+      return { ok: true };
+    },
+
+    /** This device's settings, by its push endpoint (which only the browser knows). */
+    async deviceSettings(endpoint: string) {
+      const device = await pushSubscriptions.findByEndpoint(endpoint);
+      return device
+        ? {
+            broadcastLevel: device.broadcastLevel as "PRICE_ERROR" | "BIG_DROP" | "NORMAL" | null,
+            quietStartHour: device.quietStartHour,
+            quietEndHour: device.quietEndHour,
+            hasAccount: device.userId !== null,
+          }
+        : null;
+    },
+
+    /** Changes what a device follows and its quiet hours. */
+    async updateDeviceSettings(
+      settings: DeviceSettingsInput,
+    ): Promise<{ ok: true } | { ok: false; error: "NOT_FOUND" | "NOTHING_TO_FOLLOW" }> {
+      const device = await pushSubscriptions.findByEndpoint(settings.endpoint);
+      if (!device) return { ok: false, error: "NOT_FOUND" };
+      if (!device.userId && !settings.broadcastLevel) {
+        return { ok: false, error: "NOTHING_TO_FOLLOW" };
+      }
+      const { endpoint, ...rest } = settings;
+      await pushSubscriptions.updateSettings(endpoint, rest);
+      return { ok: true };
+    },
+
+    /** Turns push off for a device: its owner's, or an account-free one. */
+    async removeDevice(userId: string | null, endpoint: string): Promise<boolean> {
+      const device = await pushSubscriptions.findByEndpoint(endpoint);
+      if (!device) return false;
+      if (device.userId && device.userId !== userId) return false;
+      return pushSubscriptions.deleteByEndpoint(endpoint);
     },
 
     removePushSubscription(userId: string, endpoint: string): Promise<boolean> {

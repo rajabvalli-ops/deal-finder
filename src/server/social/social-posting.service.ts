@@ -18,7 +18,7 @@ export const X_SHARE_NETWORK = "x-share";
 const MAX_ATTEMPTS = 3;
 const DAY_MS = 86_400_000;
 
-export type PostedDeal = Pick<DealForPost, "id" | "slug" | "level" | "title">;
+export type PostedDeal = DealForPost;
 
 /** Publishes a prepared post; returns the network's id for it (null for "tap to tweet"). */
 export type Poster = {

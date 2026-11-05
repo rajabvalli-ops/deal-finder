@@ -57,7 +57,7 @@ Everything here can be done in a phone browser — no terminal needed. Hosting i
    - `CRON_SECRET`: exactly the same value as in Vercel.
 2. Test it: **Actions → Scheduled jobs → Run workflow**, choose `process-alerts`, run. A green
    tick with a short JSON report means it works. From now on the jobs run on their own
-   (prices every 3 hours, deal checks hourly, catalogue daily). GitHub may start scheduled
+   (prices every 10 minutes, deal checks hourly, catalogue daily). GitHub may start scheduled
    runs a few minutes late.
 
 ## 4b. Faster price checks (recommended for price errors)
@@ -91,6 +91,9 @@ alerted.
 1. Open the site in **Safari → Share → Add to Home Screen**.
 2. Open it from the new icon, sign in, go to **Price alerts** and tap **Turn on notifications
    on this device**. As the admin you'll also get "tap to tweet" alerts for price errors.
+3. Your visitors don't need an account: the **Get price error alerts — no account needed**
+   button on the homepage signs their phone up for every price error (or big drops too), with
+   optional quiet hours. Up to 60 of these go out a day.
 
 ## Later
 

@@ -9,6 +9,7 @@ import {
   createAlertMatchingService,
   type MatchSummary,
 } from "@/server/services/alerts/alert-matching.service";
+import { broadcastFromEnv } from "@/server/services/alerts/broadcast.service";
 import { pushDeliveryFromEnv } from "@/server/services/alerts/push-delivery.service";
 import { sharePushFromEnv } from "@/server/social/share-push.service";
 import { socialPostingFromEnv, type SocialSummary } from "@/server/social/social-posting.service";
@@ -103,6 +104,8 @@ export type JobReport =
       social?: SocialSummary;
       /** "Tap to tweet" pushes to editors; used when push is set up but X's API isn't. */
       share?: SocialSummary;
+      /** Pushes to devices following every big drop / price error (push set up). */
+      broadcast?: SocialSummary;
     }
   | { job: JobName; status: "skipped"; reason: string };
 
@@ -144,9 +147,24 @@ async function postToSocial(
   return {};
 }
 
-/** After a detection pass: notify alerts, then post to social. */
+/** Pushes new big drops and price errors to devices following them (no account needed). */
+async function broadcast(
+  ctx: JobContext,
+  settings: JobSettings,
+): Promise<{ broadcast?: SocialSummary }> {
+  const service = broadcastFromEnv(ctx.client, ctx.env);
+  if (!service) return {};
+  const since = new Date(ctx.now.getTime() - settings.alertWindowMs);
+  return { broadcast: await service.run({ now: ctx.now, since }) };
+}
+
+/** After a detection pass: notify alerts and followers first (speed), then post to social. */
 async function announce(ctx: JobContext, settings: JobSettings) {
-  return { alerts: await notifyAlerts(ctx, settings), ...(await postToSocial(ctx, settings)) };
+  return {
+    alerts: await notifyAlerts(ctx, settings),
+    ...(await broadcast(ctx, settings)),
+    ...(await postToSocial(ctx, settings)),
+  };
 }
 
 function summarise(summary: DetectionSummary) {
@@ -267,7 +285,7 @@ const JOBS: Record<
 
   /** Notifies users whose alerts match recently published deals. */
   async "process-alerts"(ctx, settings) {
-    return { alerts: await notifyAlerts(ctx, settings) };
+    return { alerts: await notifyAlerts(ctx, settings), ...(await broadcast(ctx, settings)) };
   },
 
   /** Catch-up for social posting (detection passes already post as they go). */

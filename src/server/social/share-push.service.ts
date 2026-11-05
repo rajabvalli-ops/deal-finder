@@ -1,5 +1,6 @@
 import "server-only";
 import type { DealLevel } from "@/lib/public-types";
+import { isQuietHour } from "@/lib/quiet-hours";
 import { createPushSubscriptionRepository } from "@/server/db/repositories/push-subscription.repository";
 import type { DbClient } from "@/server/db/types";
 import { createPushSender, pushConfigFromEnv, type PushSender } from "@/server/push/web-push";
@@ -40,7 +41,9 @@ export function createSharePushService(
   const subscriptions = createPushSubscriptionRepository(client);
 
   async function pushToEditors(text: string, deal: PostedDeal, now: Date): Promise<void> {
-    const targets = await subscriptions.listForRoles(["EDITOR", "ADMIN"]);
+    const targets = (await subscriptions.listForRoles(["EDITOR", "ADMIN"])).filter(
+      (t) => !isQuietHour(t, now),
+    );
     let delivered = 0;
     for (const target of targets) {
       const result = await sender.send(target, {

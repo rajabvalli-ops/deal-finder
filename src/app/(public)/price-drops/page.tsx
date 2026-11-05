@@ -5,6 +5,7 @@ import { DealGrid } from "@/components/public/deal-card";
 import { PageLinks } from "@/components/public/sort-and-pages";
 import { pageRequest } from "@/lib/pagination";
 import { publicCatalogue } from "@/server/services/public";
+import { DeviceAlertsBox } from "../device-alerts-box";
 
 export const metadata: Metadata = {
   title: "Big price drops and possible price errors",
@@ -40,6 +41,7 @@ export default async function PriceDropsPage({
           so you hear about them first.
         </p>
       </div>
+      <DeviceAlertsBox title="Get these the moment they appear" />
       {deals.items.length > 0 ? (
         <DealGrid deals={deals.items} />
       ) : (

@@ -3,6 +3,7 @@ import { DealGrid } from "@/components/public/deal-card";
 import { SearchBox } from "@/components/public/search-form";
 import { site } from "@/lib/site";
 import { publicCatalogue } from "@/server/services/public";
+import { DeviceAlertsBox } from "./device-alerts-box";
 
 // Cached for five minutes; publishing or editing a deal in the admin refreshes it at once.
 export const revalidate = 300;
@@ -79,6 +80,8 @@ export default async function HomePage() {
           </li>
         </ul>
       </section>
+
+      <DeviceAlertsBox />
 
       {empty ? (
         <p className="rounded-lg border border-line p-6 text-ink-muted">

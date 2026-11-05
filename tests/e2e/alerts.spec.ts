@@ -18,6 +18,22 @@ test("signed-out visitors are asked to sign in", async ({ page }) => {
   );
 });
 
+test("anyone can turn on price error alerts without an account", async ({ page }) => {
+  // Headless Chromium always reports notifications as blocked; a real browser that hasn't been
+  // asked yet reports "default".
+  await page.addInitScript(() => {
+    Object.defineProperty(Notification, "permission", { get: () => "default" });
+  });
+  for (const path of ["/", "/price-drops", "/alerts"]) {
+    await page.goto(path);
+    const box = page.getByRole("region", { name: "Notifications on this device" });
+    await expect(
+      box.getByRole("button", { name: "🚨 Get price error alerts — no account needed" }),
+    ).toBeVisible();
+    await expect(box.getByLabel("Alert me about")).toHaveValue("price-error");
+  }
+});
+
 test("a keyword alert notifies the user when a matching deal is published", async ({
   page,
   browser,

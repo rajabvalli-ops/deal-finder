@@ -602,22 +602,31 @@ model Notification {
 }
 
 /// A browser that agreed to receive push notifications (Web Push). Keys are the browser's
-/// public encryption keys, not secrets of ours.
+/// public encryption keys, not secrets of ours. Signed-in users' devices also get their own
+/// alerts; any device — with or without an account — can follow every deal at a level
+/// ("all price errors"). Quiet hours are per device, in UK time.
 model PushSubscription {
-  id            String    @id @default(cuid())
-  userId        String
+  id             String     @id @default(cuid())
+  /// Null for devices that signed up without an account.
+  userId         String?
   /// The push service URL the browser gave us. Unique per browser profile.
-  endpoint      String    @unique
-  p256dh        String
-  auth          String
-  userAgent     String?
-  lastSuccessAt DateTime? @db.Timestamptz(3)
-  failureCount  Int       @default(0)
-  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+  endpoint       String     @unique
+  p256dh         String
+  auth           String
+  userAgent      String?
+  /// Every public deal at this level or above (null = only the owner's own alerts).
+  broadcastLevel DealLevel?
+  /// Hours (0–23, UK time) between which nothing is sent; both set or both null.
+  quietStartHour Int?
+  quietEndHour   Int?
+  lastSuccessAt  DateTime?  @db.Timestamptz(3)
+  failureCount   Int        @default(0)
+  createdAt      DateTime   @default(now()) @db.Timestamptz(3)
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([broadcastLevel])
 }
 
 /// A deal posted (or queued) to a social network, e.g. the brand's X account. One post per
