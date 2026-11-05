@@ -150,6 +150,8 @@ model User {
   pushSubscriptions PushSubscription[]
   reports           Report[]           @relation("ReportAuthor")
   dealVotes         DealVote[]
+  comments          Comment[]          @relation("CommentAuthor")
+  hiddenComments    Comment[]          @relation("CommentModerator")
   clicks            Click[]
   reviewedDeals     Deal[]             @relation("DealReviewer")
   auditLogs         AuditLog[]
@@ -429,6 +431,7 @@ model Deal {
   socialPosts    SocialPost[]
   reports        Report[]
   votes          DealVote[]
+  comments       Comment[]
 
   @@index([status, publishedAt])
   @@index([status, hotRank])
@@ -436,6 +439,31 @@ model Deal {
   @@index([retailerId, status])
   @@index([productId, status])
   @@index([variantId])
+}
+
+enum CommentStatus {
+  VISIBLE
+  HIDDEN
+}
+
+/// A signed-in user's comment on a deal. Plain text; editors can hide it.
+model Comment {
+  id         String        @id @default(cuid())
+  dealId     String
+  userId     String
+  body       String
+  status     CommentStatus @default(VISIBLE)
+  hiddenAt   DateTime?     @db.Timestamptz(3)
+  hiddenById String?
+  createdAt  DateTime      @default(now()) @db.Timestamptz(3)
+
+  deal     Deal  @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  user     User  @relation("CommentAuthor", fields: [userId], references: [id], onDelete: Cascade)
+  hiddenBy User? @relation("CommentModerator", fields: [hiddenById], references: [id], onDelete: SetNull)
+
+  @@index([dealId, status, createdAt])
+  @@index([createdAt])
+  @@index([userId])
 }
 
 /// One person's vote on a deal: +1 (hot) or -1 (cold).

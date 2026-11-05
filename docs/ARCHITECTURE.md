@@ -1092,6 +1092,20 @@ different `adapterConfig`.
 - Not copied: "resale" deals (profit on resale) would need resale price data we don't have,
   and labelling deals with made-up resale profits would mislead.
 
+### Comments (implemented in Stage 17d)
+
+- Signed-in users comment on public deals (`Comment`, plain text, 1–1,000 characters, CHECK
+  in the database; whitespace tidied). React escapes the text and links aren't made
+  clickable, so a comment can't inject markup or pass on a link that looks endorsed.
+- Only the author's **first name** is shown ("Member" if they gave none), never their email.
+  Authors can delete their own comments. Posting is rate-limited (5 per person per 10
+  minutes, per instance).
+- Comments load in the browser through server actions, so the cached deal page is the same
+  for everyone and a new comment shows straight away.
+- **Moderation:** `/admin/comments` lists the latest 200; editors hide or show a comment
+  (audited, `hiddenAt` / `hiddenById` kept). Hidden comments disappear from the deal page at
+  once.
+
 ### Search (implemented in Stage 12)
 
 `src/lib/validation/search.ts` (parsing), `src/server/db/repositories/search.repository.ts`
@@ -1483,6 +1497,7 @@ Each stage ends with passing tests and a summary; no stage starts without instru
 | 17a | Alerts without account | Price error / big drop push alerts with no account, per-device quiet hours                                                                         |
 | 17b | Voting & Hot           | Hot / cold votes on deals, a Hot tab and homepage section                                                                                          |
 | 17c | Codes & freebies       | Voucher discounts, "price with code" on deals, "checked X ago" stamps, Freebie badge                                                               |
+| 17d | Comments               | Comments on deals by signed-in users, first names only, editor moderation                                                                          |
 | 15  | SEO                    | Metadata, canonical, sitemap, robots, OpenGraph, breadcrumbs, JSON-LD                                                                              |
 | 16  | Hardening              | Analytics rollups, rate limiting live, a11y/perf budgets, security review, dependency upgrades                                                     |
 | 17  | Go live with Amazon    | First run against the real Creators API with your credentials; fix any field mapping differences                                                   |

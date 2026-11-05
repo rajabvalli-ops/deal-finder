@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AffiliateDisclosure } from "@/components/public/affiliate-disclosure";
 import { Breadcrumbs, type Crumb } from "@/components/public/breadcrumbs";
+import { DealComments } from "@/components/public/deal-comments";
 import { DealGrid, LevelBadge } from "@/components/public/deal-card";
 import { OutboundButton } from "@/components/public/outbound-button";
 import { isFreebie, PriceBlock } from "@/components/public/price-block";
@@ -17,6 +18,7 @@ import { VoucherCard } from "@/components/public/voucher-card";
 import { REPORT_REASONS } from "@/lib/validation/vouchers";
 import { publicCatalogue } from "@/server/services/public";
 import { vouchers } from "@/server/services/vouchers";
+import { deleteComment, listComments, postComment } from "../../comment-actions";
 import { reportProblem } from "../../report-actions";
 import { dealVoteState, voteOnDeal } from "../../vote-actions";
 
@@ -228,6 +230,13 @@ export default async function DealPage({ params }: Props) {
           <p className="max-w-prose text-ink-muted">{deal.product.description}</p>
         ) : null}
       </section>
+
+      <DealComments
+        slug={deal.slug}
+        list={listComments}
+        post={postComment}
+        remove={deleteComment}
+      />
 
       {related.length > 0 ? (
         <section className="space-y-4">
