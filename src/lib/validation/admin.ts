@@ -12,6 +12,8 @@ const optionalText = (max: number) =>
 
 export const idSchema = z.string().trim().min(1).max(64);
 
+export const dealIdSchema = z.object({ dealId: idSchema });
+
 export const dealActionSchema = z.object({
   dealId: idSchema,
   action: z.enum(["approve", "reject", "publish", "expire", "remove"]),

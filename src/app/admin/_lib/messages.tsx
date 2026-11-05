@@ -9,6 +9,7 @@ const NOTICES: Record<string, string> = {
   remove: "Deal removed.",
   saved: "Changes saved.",
   created: "Created.",
+  posted: "Posted to X.",
 };
 
 /** Shows the result of the last action from ?notice= / ?error= codes (never raw input). */

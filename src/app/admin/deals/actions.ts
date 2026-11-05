@@ -2,9 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
-import { dealActionSchema, dealContentSchema } from "@/lib/validation/admin";
+import { dealActionSchema, dealContentSchema, dealIdSchema } from "@/lib/validation/admin";
 import { requireRole } from "@/server/auth";
-import { adminDeals } from "@/server/services/admin";
+import { adminDeals, postDealToSocial } from "@/server/services/admin";
 import { alertMatching } from "@/server/services/alerts";
 import { backTo, formObject } from "../_lib/redirect";
 
@@ -50,5 +50,19 @@ export async function updateDealContent(formData: FormData): Promise<void> {
     returnTo,
     `/admin/deals/${dealId}`,
     result.ok ? { notice: "saved" } : { error: result.error },
+  );
+}
+
+export async function postDealToX(formData: FormData): Promise<void> {
+  await requireRole("EDITOR", "/admin/deals");
+  const returnTo = formData.get("returnTo");
+  const parsed = dealIdSchema.safeParse(formObject(formData));
+  if (!parsed.success) backTo(returnTo, "/admin/deals", { error: "INVALID_INPUT" });
+  const { dealId } = parsed.data;
+  const result = await postDealToSocial(dealId, new Date());
+  backTo(
+    returnTo,
+    `/admin/deals/${dealId}`,
+    result.ok ? { notice: "posted" } : { error: result.error },
   );
 }

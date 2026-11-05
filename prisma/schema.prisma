@@ -91,6 +91,13 @@ enum NotificationStatus {
   SKIPPED
 }
 
+enum SocialPostStatus {
+  PENDING
+  POSTED
+  FAILED
+  SKIPPED
+}
+
 enum ImportJobType {
   CATALOGUE_IMPORT
   PRICE_REFRESH
@@ -391,6 +398,7 @@ model Deal {
   affiliateLinks AffiliateLink[]
   clicks         Click[]
   notifications  Notification[]
+  socialPosts    SocialPost[]
 
   @@index([status, publishedAt])
   @@index([status, level, publishedAt])
@@ -585,6 +593,31 @@ model PushSubscription {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+/// A deal posted (or queued) to a social network, e.g. the brand's X account. One post per
+/// deal and level, so a deal that drops into "price error" can be posted again.
+model SocialPost {
+  id         String           @id @default(cuid())
+  /// e.g. "x"
+  network    String
+  dealId     String?
+  level      DealLevel
+  status     SocialPostStatus @default(PENDING)
+  /// The exact text sent (or to be sent).
+  text       String
+  /// The network's id for the post, once posted.
+  externalId String?
+  attempts   Int              @default(0)
+  lastError  String?
+  createdAt  DateTime         @default(now()) @db.Timestamptz(3)
+  postedAt   DateTime?        @db.Timestamptz(3)
+
+  deal Deal? @relation(fields: [dealId], references: [id], onDelete: SetNull)
+
+  @@unique([network, dealId, level])
+  @@index([network, status, createdAt])
+  @@index([network, postedAt])
 }
 
 // ───────────── Operations ─────────────

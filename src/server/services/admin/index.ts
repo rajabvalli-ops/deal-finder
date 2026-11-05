@@ -4,6 +4,9 @@ import { createAdminRepository } from "@/server/db/repositories/admin.repository
 import { createPriceHistoryRepository } from "@/server/db/repositories/price-history.repository";
 import { computePriceStats } from "@/server/pricing";
 import { AMAZON_ENV } from "@/server/retailers/adapters/amazon";
+import { createSocialPostRepository } from "@/server/db/repositories/social-post.repository";
+import { socialPostingFromEnv } from "@/server/social/social-posting.service";
+import { fail, ok, type AdminResult } from "./result";
 import { amazonConfigOf, createAdminCatalogueService } from "./admin-catalogue.service";
 import { createAdminDealsService } from "./admin-deals.service";
 import { createAdminUsersService } from "./admin-users.service";
@@ -29,11 +32,18 @@ async function variantHistory(variantId: string, now: Date) {
 export async function getDealDetail(id: string, now: Date) {
   const deal = await adminReads.findDeal(id);
   if (!deal) return null;
-  const [history, audit] = await Promise.all([
+  const [history, audit, socialPosts] = await Promise.all([
     variantHistory(deal.variantId, now),
     adminReads.auditTrail("Deal", deal.id),
+    createSocialPostRepository(db).listForDeal(deal.id),
   ]);
-  return { deal, ...history, audit };
+  return {
+    deal,
+    ...history,
+    audit,
+    socialPosts,
+    socialEnabled: socialPostingFromEnv(db, process.env) !== undefined,
+  };
 }
 
 export async function getProductDetail(id: string, now: Date) {
@@ -51,4 +61,15 @@ export async function getAmazonTracking(retailerId: string) {
   if (!retailer || !config) return null;
   const missingEnv = Object.values(AMAZON_ENV).filter((key) => !process.env[key]?.trim());
   return { retailer, config, missingEnv };
+}
+
+/** An editor's "Post to X now" for a live deal. Counts against the daily posting limit. */
+export async function postDealToSocial(dealId: string, now: Date): Promise<AdminResult> {
+  const social = socialPostingFromEnv(db, process.env);
+  if (!social) return fail("SOCIAL_OFF");
+  const deal = await adminReads.findDeal(dealId);
+  if (!deal) return fail("NOT_FOUND");
+  if (deal.status !== "PUBLISHED") return fail("NOT_LIVE");
+  const result = await social.postDeal({ dealId: deal.id, level: deal.level, now });
+  return result.posted > 0 ? ok(undefined) : fail("SOCIAL_FAILED");
 }

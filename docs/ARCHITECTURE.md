@@ -764,6 +764,7 @@ where an HTTP endpoint is genuinely required.
 | `/api/cron/detect-deals`       | POST       | `CRON_SECRET`        | Run deal engine                       |
 | `/api/cron/expire-deals`       | POST       | `CRON_SECRET`        | Expire stale deals                    |
 | `/api/cron/process-alerts`     | POST       | `CRON_SECRET`        | Match alerts → in-app notifications   |
+| `/api/cron/post-social`        | POST       | `CRON_SECRET`        | Post big drops / price errors to X    |
 | `/api/cron/send-notifications` | POST       | `CRON_SECRET`        | _Future:_ deliver queued emails       |
 | `/api/health`                  | GET        | public               | Liveness + DB check                   |
 | `/api/v1/*`                    | —          | API key              | _Future_ public/partner API           |
@@ -977,6 +978,28 @@ different `adapterConfig`.
   and VAPID signing are tested by decrypting a real payload; subscribing in a real browser
   needs the browser's push service and has not been exercised here.
 
+### Posting deals to X (implemented in Stage 15)
+
+`src/lib/social.ts` (post text), `src/server/social/` (`x-client.ts`, `config.ts`,
+`social-posting.service.ts`), `SocialPost` table, admin deal page "X posts".
+
+- **What is posted:** public deals at `X_POST_MIN_LEVEL` or above (default: big drops and
+  possible price errors), once per deal and level — a big drop that later becomes a price
+  error is posted again. Price errors go first. Editors can "Post to X now" any live deal.
+- **When:** straight after every detection pass (after alerts), and by the hourly
+  `post-social` job. A rolling 24-hour cap (`X_DAILY_POST_LIMIT`, default 10) controls cost;
+  the rest wait for the next window. A deal that is no longer live by its turn is skipped.
+- **Text** is built from the engine's numbers: headline, price first, the comparison named
+  honestly ("Was" only for a real previous price, otherwise "30-day average"), a
+  cancellation warning on price errors, the link, and `#ad` (affiliate posts must be labelled
+  as ads). Fits X's 280-character count (URLs 23, emoji 2).
+- **Links:** to our deal page (which has the Amazon button, price-checked time and
+  disclosure), or none (`X_POST_LINKS=none`) — X charges much more for posts with a link.
+- **API:** `POST https://api.x.com/2/tweets`, OAuth 1.0a user context (the brand account's
+  access token); the signer reproduces X's documented signature example. 429/401/5xx stop the
+  run and retry later; 403 (duplicate or refused) gives up; other errors give up after 3 tries.
+- **Not yet tested against X itself** — it needs the account's keys. Images are not attached.
+
 ### Search (implemented in Stage 12)
 
 `src/lib/validation/search.ts` (parsing), `src/server/db/repositories/search.repository.ts`
@@ -1160,6 +1183,7 @@ WHERE lockedUntil <= now`), atomic across instances and safe behind connection p
 | `refresh-prices`   | every 3 h at :07              | Per active retailer with price lookup: re-price listings with active deals first, then the least recently priced. Then run deal detection on them.                                                                   |
 | `detect-deals`     | hourly at :37                 | Deal detection for listings priced in the last 26 h (safety net if a chained run was missed).                                                                                                                        |
 | `expire-deals`     | hourly at :47                 | Re-check every active deal: expire it if the product was delisted, its `expiresAt` passed, its price hasn't been re-checked for 48 h, it no longer passes the deal engine, or its variant stopped being the default. |
+| `post-social`      | hourly at :27                 | Catch-up for posting to X (every detection pass already posts straight after notifying alerts). Only runs when the X keys are set.                                                                                   |
 | `process-alerts`   | hourly at :52                 | Notify alerts matching deals published in the last 26 h (each alert/deal pair once). Publishing in the admin also matches that deal immediately; this is the catch-up.                                               |
 
 Because detection is chained after imports and refreshes, the pipeline still works on a
@@ -1357,6 +1381,7 @@ Each stage ends with passing tests and a summary; no stage starts without instru
 | 12  | Search                 | Postgres FTS + trigram, filters, sorting, pagination                                                                                               |
 | 13  | Alerts & notifications | Alert CRUD, matching job, in-app notifications (email + unsubscribe wait for a provider — see §14.7)                                               |
 | 14  | Amazon & price drops   | Amazon UK (Creators API) adapter + tracking admin, deal levels, auto-publish, level alerts, browser push (live Amazon test needs your credentials) |
+| 15a | Post deals to X        | Auto-post big drops and price errors to the brand's X account, daily cap, admin "Post to X now"                                                    |
 | 15  | SEO                    | Metadata, canonical, sitemap, robots, OpenGraph, breadcrumbs, JSON-LD                                                                              |
 | 16  | Hardening              | Analytics rollups, rate limiting live, a11y/perf budgets, security review, dependency upgrades                                                     |
 | 17  | Go live with Amazon    | First run against the real Creators API with your credentials; fix any field mapping differences                                                   |

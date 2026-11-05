@@ -18,6 +18,9 @@ test("an editor reviews, approves and publishes a detected deal", async ({ page 
   await expect(page.getByRole("status")).toHaveText("Deal published.");
   await expect(page.getByText("Published", { exact: true })).toBeVisible();
   await expect(page.getByText(/deal\.publish by/)).toBeVisible();
+  // E2E runs without X keys: the section explains how to switch posting on.
+  await expect(page.getByRole("heading", { name: "X posts" })).toBeVisible();
+  await expect(page.getByText(/Posting to X is off/)).toBeVisible();
 });
 
 test("an editor rejects a deal with a reason and edits another", async ({ page }) => {

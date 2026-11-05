@@ -10,6 +10,7 @@ import {
   type MatchSummary,
 } from "@/server/services/alerts/alert-matching.service";
 import { pushDeliveryFromEnv } from "@/server/services/alerts/push-delivery.service";
+import { socialPostingFromEnv, type SocialSummary } from "@/server/social/social-posting.service";
 import {
   createDealDetectionService,
   type DetectionSummary,
@@ -29,6 +30,7 @@ export const JOB_NAMES = [
   "detect-deals",
   "expire-deals",
   "process-alerts",
+  "post-social",
 ] as const;
 export type JobName = (typeof JOB_NAMES)[number];
 
@@ -81,6 +83,8 @@ export type JobReport =
       retailers?: RetailerOutcome[];
       deals?: Omit<DetectionSummary, "errors"> & { errors: number };
       alerts?: MatchSummary;
+      /** Absent when X isn't connected. */
+      social?: SocialSummary;
     }
   | { job: JobName; status: "skipped"; reason: string };
 
@@ -90,6 +94,7 @@ const LEASES: Record<JobName, number> = {
   "detect-deals": 10 * MINUTE_MS,
   "expire-deals": 10 * MINUTE_MS,
   "process-alerts": 10 * MINUTE_MS,
+  "post-social": 10 * MINUTE_MS,
 };
 
 /**
@@ -103,6 +108,26 @@ function notifyAlerts(ctx: JobContext, settings: JobSettings): Promise<MatchSumm
     now: ctx.now,
     since: new Date(ctx.now.getTime() - settings.alertWindowMs),
   });
+}
+
+/** Posts newly published big drops and price errors to X, when X is connected. */
+async function postToSocial(
+  ctx: JobContext,
+  settings: JobSettings,
+): Promise<{ social?: SocialSummary }> {
+  const social = socialPostingFromEnv(ctx.client, ctx.env);
+  if (!social) return {};
+  return {
+    social: await social.run({
+      now: ctx.now,
+      since: new Date(ctx.now.getTime() - settings.alertWindowMs),
+    }),
+  };
+}
+
+/** After a detection pass: notify alerts, then post to social. */
+async function announce(ctx: JobContext, settings: JobSettings) {
+  return { alerts: await notifyAlerts(ctx, settings), ...(await postToSocial(ctx, settings)) };
 }
 
 function summarise(summary: DetectionSummary) {
@@ -177,7 +202,7 @@ const JOBS: Record<
       now: ctx.now,
       since: ctx.now,
     });
-    return { retailers, deals: summarise(deals), alerts: await notifyAlerts(ctx, settings) };
+    return { retailers, deals: summarise(deals), ...(await announce(ctx, settings)) };
   },
 
   /** Re-prices the most important listings of each retailer, then detects deals on them. */
@@ -204,7 +229,7 @@ const JOBS: Record<
       now: ctx.now,
       since: ctx.now,
     });
-    return { retailers, deals: summarise(deals), alerts: await notifyAlerts(ctx, settings) };
+    return { retailers, deals: summarise(deals), ...(await announce(ctx, settings)) };
   },
 
   async "detect-deals"(ctx, settings) {
@@ -213,7 +238,7 @@ const JOBS: Record<
       now: ctx.now,
       since,
     });
-    return { deals: summarise(deals), alerts: await notifyAlerts(ctx, settings) };
+    return { deals: summarise(deals), ...(await announce(ctx, settings)) };
   },
 
   async "expire-deals"(ctx) {
@@ -224,6 +249,11 @@ const JOBS: Record<
   /** Notifies users whose alerts match recently published deals. */
   async "process-alerts"(ctx, settings) {
     return { alerts: await notifyAlerts(ctx, settings) };
+  },
+
+  /** Catch-up for social posting (detection passes already post as they go). */
+  async "post-social"(ctx, settings) {
+    return postToSocial(ctx, settings);
   },
 };
 

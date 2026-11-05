@@ -9,7 +9,7 @@ import { allowedActions, isEditable } from "@/server/deals/workflow";
 import { getDealDetail } from "@/server/services/admin";
 import { ActionMessages } from "../../_lib/messages";
 import { param, type SearchParams } from "../../_lib/params";
-import { dealAction, updateDealContent } from "../actions";
+import { dealAction, postDealToX, updateDealContent } from "../actions";
 
 export const metadata: Metadata = { title: "Deal" };
 
@@ -148,6 +148,57 @@ export default async function AdminDealPage({
           </div>
         </section>
       ) : null}
+
+      <section className="space-y-3" aria-labelledby="x-heading">
+        <h2 id="x-heading" className="text-lg font-semibold">
+          X posts
+        </h2>
+        {!detail.socialEnabled ? (
+          <p className="text-sm text-ink-muted">
+            Posting to X is off. Add the X API keys to the environment to post deals automatically.
+          </p>
+        ) : deal.status === "PUBLISHED" ? (
+          <form action={postDealToX}>
+            <input type="hidden" name="dealId" value={deal.id} />
+            <input type="hidden" name="returnTo" value={returnTo} />
+            <button
+              type="submit"
+              className="rounded-md border border-line px-4 py-2 font-medium hover:border-brand-600"
+            >
+              Post to X now
+            </button>
+          </form>
+        ) : null}
+        {detail.socialPosts.length > 0 ? (
+          <ul className="divide-y divide-line rounded-md border border-line text-sm">
+            {detail.socialPosts.map((p) => (
+              <li key={p.id} className="space-y-1 p-3">
+                <p>
+                  <strong>{humanise(p.status)}</strong> · {humanise(p.level)}
+                  {p.postedAt ? ` · ${formatDateTime(p.postedAt)}` : ""}
+                  {p.externalId ? (
+                    <>
+                      {" · "}
+                      <a
+                        href={`https://x.com/i/web/status/${encodeURIComponent(p.externalId)}`}
+                        className="text-brand-600 hover:underline"
+                        rel="noopener"
+                        target="_blank"
+                      >
+                        View on X
+                      </a>
+                    </>
+                  ) : null}
+                </p>
+                {p.lastError && p.status !== "POSTED" ? (
+                  <p className="text-red-800">{p.lastError}</p>
+                ) : null}
+                {p.text ? <pre className="whitespace-pre-wrap text-ink-muted">{p.text}</pre> : null}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </section>
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Why it was flagged</h2>

@@ -10,7 +10,10 @@ export type AdminErrorCode =
   | "SELF_CHANGE"
   | "LAST_ADMIN"
   | "INVALID_ASINS"
-  | "LIMIT_REACHED";
+  | "LIMIT_REACHED"
+  | "SOCIAL_OFF"
+  | "NOT_LIVE"
+  | "SOCIAL_FAILED";
 
 export type AdminResult<T = void> = { ok: true; value: T } | { ok: false; error: AdminErrorCode };
 
@@ -32,6 +35,10 @@ export const ADMIN_ERROR_MESSAGES: Record<AdminErrorCode, string> = {
   INVALID_ASINS:
     "Some entries aren't ASINs or amazon.co.uk product links (short amzn.to links can't be read). Nothing was saved.",
   LIMIT_REACHED: "That's more than this retailer can track. Remove some first.",
+  SOCIAL_OFF: "Posting to X isn't set up yet: add the X API keys to the environment.",
+  NOT_LIVE: "Only live (published) deals can be posted.",
+  SOCIAL_FAILED:
+    "It wasn't posted: today's posting limit is used up, X rejected it, or it was already posted. See the X posts list below.",
 };
 
 export type Actor = { id: string; role: string };
