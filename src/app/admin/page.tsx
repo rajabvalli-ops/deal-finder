@@ -3,12 +3,16 @@ import { StatusBadge } from "@/components/admin/status-badge";
 import { formatDateTime, humanise } from "@/lib/format";
 import { DEAL_STATUSES } from "@/server/deals/workflow";
 import { adminReads } from "@/server/services/admin";
+import { reports } from "@/server/services/reports";
 
 export const metadata = { title: "Overview" };
 
 export default async function AdminOverviewPage() {
   const now = new Date();
-  const o = await adminReads.overview(new Date(now.getTime() - 7 * 86_400_000));
+  const [o, openReports] = await Promise.all([
+    adminReads.overview(new Date(now.getTime() - 7 * 86_400_000)),
+    reports.countOpen(),
+  ]);
   const dealCount = (status: string) =>
     o.dealsByStatus.find((d) => d.status === status)?._count._all ?? 0;
 
@@ -31,6 +35,7 @@ export default async function AdminOverviewPage() {
     { label: "Active products", value: o.activeProducts, href: "/admin/products" },
     { label: "Active retailers", value: o.activeRetailers, href: "/admin/retailers" },
     { label: "Users", value: o.users, href: "/admin/users" },
+    { label: "Open reports", value: openReports, href: "/admin/reports" },
     { label: "Active alerts", value: o.activeAlerts, href: "/admin/alerts" },
     { label: "Clicks (last 7 days)", value: o.recentClicks, href: "/admin/clicks" },
   ];

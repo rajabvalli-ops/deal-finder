@@ -12,6 +12,23 @@ const optionalText = (max: number) =>
 
 export const idSchema = z.string().trim().min(1).max(64);
 
+/**
+ * From <input type="datetime-local">; "" → null. Interpreting it as UK local time is out of
+ * scope — treated as UTC.
+ */
+export const optionalDateTime = z
+  .string()
+  .trim()
+  .transform((v, ctx) => {
+    if (v === "") return null;
+    const date = new Date(/[zZ]|[+-]\d\d:\d\d$/.test(v) ? v : `${v}Z`);
+    if (Number.isNaN(date.getTime())) {
+      ctx.addIssue({ code: "custom", message: "Invalid date" });
+      return z.NEVER;
+    }
+    return date;
+  });
+
 export const dealIdSchema = z.object({ dealId: idSchema });
 
 export const dealActionSchema = z.object({
@@ -29,19 +46,7 @@ export const dealContentSchema = z.object({
     .union([z.literal("on"), z.literal("")])
     .optional()
     .transform((v) => v === "on"),
-  /** From <input type="datetime-local">; interpreted as UK local time is out of scope — treated as UTC. */
-  expiresAt: z
-    .string()
-    .trim()
-    .transform((v, ctx) => {
-      if (v === "") return null;
-      const date = new Date(/[zZ]|[+-]\d\d:\d\d$/.test(v) ? v : `${v}Z`);
-      if (Number.isNaN(date.getTime())) {
-        ctx.addIssue({ code: "custom", message: "Invalid date" });
-        return z.NEVER;
-      }
-      return date;
-    }),
+  expiresAt: optionalDateTime,
 });
 
 export const retailerUpdateSchema = z.object({

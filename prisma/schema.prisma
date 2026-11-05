@@ -98,6 +98,25 @@ enum SocialPostStatus {
   SKIPPED
 }
 
+enum ReportTarget {
+  DEAL
+  COUPON
+}
+
+enum ReportReason {
+  EXPIRED
+  WRONG_PRICE
+  OUT_OF_STOCK
+  CODE_NOT_WORKING
+  OTHER
+}
+
+enum ReportStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+}
+
 enum ImportJobType {
   CATALOGUE_IMPORT
   PRICE_REFRESH
@@ -129,6 +148,7 @@ model User {
   alerts            Alert[]
   notifications     Notification[]
   pushSubscriptions PushSubscription[]
+  reports           Report[]           @relation("ReportAuthor")
   clicks            Click[]
   reviewedDeals     Deal[]             @relation("DealReviewer")
   auditLogs         AuditLog[]
@@ -399,6 +419,7 @@ model Deal {
   clicks         Click[]
   notifications  Notification[]
   socialPosts    SocialPost[]
+  reports        Report[]
 
   @@index([status, publishedAt])
   @@index([status, level, publishedAt])
@@ -424,9 +445,11 @@ model Coupon {
 
   retailer Retailer @relation(fields: [retailerId], references: [id], onDelete: Cascade)
   deal     Deal?    @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  reports  Report[]
 
   @@index([retailerId, isActive])
   @@index([dealId])
+  @@index([isActive, validUntil])
 }
 
 // ───────────── Tags ─────────────
@@ -618,6 +641,35 @@ model SocialPost {
   @@unique([network, dealId, level])
   @@index([network, status, createdAt])
   @@index([network, postedAt])
+}
+
+/// A visitor's "report a problem" on a deal or voucher. Exactly one of dealId/couponId is set
+/// (CHECK constraint), matching `target`; `targetId` repeats it so each reporter can report a
+/// given deal or voucher only once (unique index).
+model Report {
+  id           String       @id @default(cuid())
+  target       ReportTarget
+  targetId     String
+  dealId       String?
+  couponId     String?
+  reason       ReportReason
+  note         String?
+  /// Signed-in reporter, if any.
+  userId       String?
+  /// "user:<id>" or a daily-rotating hash of the IP — never a raw address.
+  reporterKey  String
+  status       ReportStatus @default(OPEN)
+  resolvedAt   DateTime?    @db.Timestamptz(3)
+  resolvedById String?
+  createdAt    DateTime     @default(now()) @db.Timestamptz(3)
+
+  deal   Deal?   @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  coupon Coupon? @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  user   User?   @relation("ReportAuthor", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([targetId, reporterKey])
+  @@index([status, createdAt])
+  @@index([targetId, status])
 }
 
 // ───────────── Operations ─────────────

@@ -1009,6 +1009,31 @@ different `adapterConfig`.
   run and retry later; 403 (duplicate or refused) gives up; other errors give up after 3 tries.
 - **Not yet tested against X itself** — it needs the account's keys. Images are not attached.
 
+### Vouchers and "report a problem" (implemented in Stage 16)
+
+`src/lib/validation/vouchers.ts`, `coupon.repository.ts`, `report.repository.ts`,
+`services/vouchers/`, `services/reports/`, public `/vouchers`, admin `/admin/vouchers` and
+`/admin/reports`.
+
+- **Vouchers** use the existing `Coupon` table. Editors add them: retailer, optional code
+  (stored upper-case, `^[A-Z0-9][A-Z0-9_-]{1,39}$`, checked in the database too), headline,
+  details, terms, optional end time and optional deal (same retailer only) for product codes
+  such as Amazon vouchers. Live = switched on, started, not ended, retailer active; ended
+  vouchers drop off by themselves. `/vouchers` lists them ending-soonest first with one-tap
+  copy; a deal's page shows its codes ("Save more with this code"). Retailer-wide codes link
+  to the retailer's page on our site — there are no retailer-level affiliate links yet.
+- **Reports**: every deal and voucher has "Report a problem" (no sign-in). Reasons: deal —
+  ended, price different, out of stock, other; voucher — code doesn't work, ended, other; an
+  optional 300-character note. One report per reporter per item (`user:<id>` or a daily HMAC
+  of the IP; raw IPs are never stored), 10 per reporter per 10 minutes, and only live items
+  can be reported. **Three distinct "ended / doesn't work" reports within 7 days switch a
+  voucher off** (audited as `coupon.auto-deactivate`). Deals are never taken down by reports:
+  they go to `/admin/reports`, grouped per item with reasons and notes, where editors expire
+  the deal, switch the voucher off, mark the reports handled, or dismiss them. The admin
+  overview shows the open count.
+- Known limit: the IP hash rotates daily, so one person could report the same voucher on
+  three different days; editors can switch a voucher back on.
+
 ### Search (implemented in Stage 12)
 
 `src/lib/validation/search.ts` (parsing), `src/server/db/repositories/search.repository.ts`
@@ -1396,6 +1421,7 @@ Each stage ends with passing tests and a summary; no stage starts without instru
 | 13  | Alerts & notifications | Alert CRUD, matching job, in-app notifications (email + unsubscribe wait for a provider — see §14.7)                                               |
 | 14  | Amazon & price drops   | Amazon UK (Creators API) adapter + tracking admin, deal levels, auto-publish, level alerts, browser push (live Amazon test needs your credentials) |
 | 15a | Post deals to X        | Auto-post big drops and price errors to the brand's X account, daily cap, admin "Post to X now"                                                    |
+| 16  | Vouchers & reports     | Voucher codes (admin, `/vouchers`, on deal pages) and "report a problem" with auto-hide for vouchers                                               |
 | 15  | SEO                    | Metadata, canonical, sitemap, robots, OpenGraph, breadcrumbs, JSON-LD                                                                              |
 | 16  | Hardening              | Analytics rollups, rate limiting live, a11y/perf budgets, security review, dependency upgrades                                                     |
 | 17  | Go live with Amazon    | First run against the real Creators API with your credentials; fix any field mapping differences                                                   |

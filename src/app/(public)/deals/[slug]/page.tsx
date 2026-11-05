@@ -11,7 +11,12 @@ import { PriceChart } from "@/components/ui/price-chart";
 import { formatDate, formatDateTime, humanise } from "@/lib/format";
 import { formatBps, formatPrice } from "@/lib/money";
 import { isAtHistoricalLow } from "@/lib/public-types";
+import { ReportProblem } from "@/components/public/report-problem";
+import { VoucherCard } from "@/components/public/voucher-card";
+import { REPORT_REASONS } from "@/lib/validation/vouchers";
 import { publicCatalogue } from "@/server/services/public";
+import { vouchers } from "@/server/services/vouchers";
+import { reportProblem } from "../../report-actions";
 
 export const revalidate = 300;
 
@@ -50,6 +55,7 @@ export default async function DealPage({ params }: Props) {
     publicCatalogue.relatedDeals(slug),
   ]);
   if (!deal) notFound();
+  const dealVouchers = await vouchers.forDeal(deal.id, now);
 
   const crumbs: Crumb[] = [
     { href: "/", label: "Home" },
@@ -130,7 +136,29 @@ export default async function DealPage({ params }: Props) {
             </Link>
           </p>
 
+          {dealVouchers.length > 0 ? (
+            <section aria-labelledby="codes-heading" className="space-y-2">
+              <h2 id="codes-heading" className="font-semibold">
+                Save more with {dealVouchers.length === 1 ? "this code" : "these codes"}
+              </h2>
+              <ul className="space-y-3">
+                {dealVouchers.map((v) => (
+                  <li key={v.id}>
+                    <VoucherCard voucher={v} now={now} showDealLink={false} />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
           <AffiliateDisclosure />
+
+          <ReportProblem
+            target="deal"
+            id={deal.id}
+            reasons={REPORT_REASONS.deal}
+            action={reportProblem}
+          />
         </div>
       </div>
 

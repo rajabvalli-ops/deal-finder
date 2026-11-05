@@ -29,6 +29,8 @@ export type PublicDealSummary = {
 export type PricePoint = { observedAt: Date; price: number };
 
 export type PublicDealDetail = PublicDealSummary & {
+  /** For "report a problem" and vouchers; an opaque id, safe to show. */
+  id: string;
   /** Code for /go/[code]; null when the retailer link isn't available. Never the URL itself. */
   linkCode: string | null;
   summary: string | null;
