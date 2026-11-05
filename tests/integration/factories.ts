@@ -3,10 +3,11 @@ import { testDb } from "./setup";
 
 let sequence = 0;
 
-export async function createRetailer(overrides: { slug?: string } = {}) {
+export async function createRetailer(overrides: { slug?: string; autoPublish?: boolean } = {}) {
   sequence += 1;
   return testDb.retailer.create({
     data: {
+      autoPublish: overrides.autoPublish ?? false,
       slug: overrides.slug ?? `test-retailer-${sequence}`,
       name: `Test Retailer ${sequence}`,
       websiteUrl: "https://retailer.invalid",
@@ -46,7 +47,7 @@ export function listingInput(
 /** A product with 30 days at £100 then £80 now, run through deal detection → one PENDING_REVIEW deal. */
 export async function createPendingDeal(
   now = new Date(),
-  overrides: { title?: string; externalId?: string } = {},
+  overrides: { title?: string; externalId?: string; dropTo?: number; autoPublish?: boolean } = {},
 ) {
   const { createProductRepository } = await import("@/server/db/repositories/product.repository");
   const { createPriceHistoryRepository } =
@@ -54,7 +55,8 @@ export async function createPendingDeal(
   const { createDealDetectionService } =
     await import("@/server/services/deals/deal-detection.service");
   const DAY = 86_400_000;
-  const retailer = await createRetailer();
+  const retailer = await createRetailer({ autoPublish: overrides.autoPublish });
+  const dropTo = overrides.dropTo ?? 8000;
   const externalId = overrides.externalId ?? "SKU-1";
   const product = await createProductRepository(testDb).upsertListing(
     listingInput(retailer.id, {
@@ -65,7 +67,7 @@ export async function createPendingDeal(
           externalId,
           name: "Default",
           isDefault: true,
-          currentPrice: 8000,
+          currentPrice: dropTo,
           availability: "IN_STOCK",
         },
       ],
@@ -85,7 +87,7 @@ export async function createPendingDeal(
   const at = new Date(now.getTime() - 3_600_000);
   await history.record({
     variantId: variant.id,
-    price: 8000,
+    price: dropTo,
     currency: "GBP",
     availability: "IN_STOCK",
     observedAt: at,
@@ -101,4 +103,48 @@ export async function createPendingDeal(
 
 export function createUser(email: string, role: "USER" | "EDITOR" | "ADMIN" = "USER") {
   return testDb.user.create({ data: { email, role } });
+}
+
+export type LiveDealOptions = {
+  description?: string;
+  brand?: string;
+  price?: number;
+  discount?: number;
+  publishedMinutesAgo?: number;
+  categoryId?: string;
+};
+
+/**
+ * A PUBLISHED deal, published `publishedMinutesAgo` before `now`; `price` and `discount`
+ * (percent) adjust its snapshot consistently.
+ */
+export async function createLiveDeal(now: Date, title: string, options: LiveDealOptions = {}) {
+  const created = await createPendingDeal(now, { title, externalId: title });
+  const price = options.price ?? 8000;
+  const discountBps = (options.discount ?? 20) * 100;
+  const reference = Math.round((price * 10000) / (10000 - discountBps));
+  await testDb.product.update({
+    where: { id: created.product.id },
+    data: {
+      description: options.description ?? null,
+      brand: options.brand ?? null,
+      categoryId: options.categoryId ?? null,
+      // Outside the detection window, so the next factory call's deal detection leaves this
+      // deal's adjusted price snapshot alone.
+      priceUpdatedAt: new Date(now.getTime() - 3 * 86_400_000),
+    },
+  });
+  await testDb.deal.update({
+    where: { id: created.deal.id },
+    data: {
+      title,
+      status: "PUBLISHED",
+      publishedAt: new Date(now.getTime() - (options.publishedMinutesAgo ?? 0) * 60_000),
+      dealPrice: price,
+      referencePrice: reference,
+      savingAmount: reference - price,
+      discountBps,
+    },
+  });
+  return created;
 }

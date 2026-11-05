@@ -1,19 +1,24 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
+import { AccountLinks } from "@/components/public/account-links";
 import { AffiliateDisclosure } from "@/components/public/affiliate-disclosure";
 import { site, primaryNav } from "@/lib/site";
 import { env } from "@/server/env";
+import { signOutAction } from "./(auth)/actions";
 import "./globals.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL(env.NEXT_PUBLIC_SITE_URL),
   title: { default: site.name, template: `%s | ${site.name}` },
   description: site.tagline,
+  icons: { icon: "/icon-192.png", apple: "/apple-touch-icon.png" },
+  appleWebApp: { capable: true, title: site.name, statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  themeColor: "#0d0d10",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -26,25 +31,33 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         >
           Skip to content
         </a>
-        <header className="border-b border-line">
+        <header className="border-b-4 border-lime-400 bg-frame-900 text-white">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
-            <Link href="/" className="text-lg font-bold text-brand-600">
-              {site.name}
+            <Link href="/" className="flex items-center gap-2" aria-label={`${site.name} home`}>
+              {/* eslint-disable-next-line @next/next/no-img-element -- small static logo */}
+              <img src="/icon-192.png" alt="" width={36} height={36} className="rounded-full" />
+              <span className="text-xl font-black tracking-tight uppercase">Deal Broker</span>
+              <span className="rounded bg-lime-400 px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-black">
+                UK
+              </span>
             </Link>
             <nav aria-label="Main">
-              <ul className="flex gap-4 text-sm font-medium">
+              <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm font-semibold">
                 {primaryNav.map((item) => (
                   <li key={item.href}>
-                    <Link href={item.href} className="hover:text-brand-600">
+                    <Link
+                      href={item.href}
+                      className={
+                        item.href === "/price-drops"
+                          ? "rounded bg-lime-400 px-2 py-0.5 text-black hover:bg-lime-300"
+                          : "hover:underline underline-offset-4"
+                      }
+                    >
                       {item.label}
                     </Link>
                   </li>
                 ))}
-                <li>
-                  <Link href="/sign-in" className="hover:text-brand-600">
-                    Sign in
-                  </Link>
-                </li>
+                <AccountLinks signOut={signOutAction} />
               </ul>
             </nav>
           </div>

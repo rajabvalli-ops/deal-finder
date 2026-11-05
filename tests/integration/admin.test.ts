@@ -208,6 +208,7 @@ describe("retailers and categories", () => {
         retailerId: retailer.id,
         status: "PAUSED",
         trustScore: 10,
+        autoPublish: false,
         now: NOW,
       }),
     ).toEqual({ ok: false, error: "FORBIDDEN" });
@@ -217,12 +218,14 @@ describe("retailers and categories", () => {
         retailerId: retailer.id,
         status: "PAUSED",
         trustScore: 80,
+        autoPublish: true,
         now: NOW,
       }),
     ).toMatchObject({ ok: true });
     expect(await testDb.retailer.findUniqueOrThrow({ where: { id: retailer.id } })).toMatchObject({
       status: "PAUSED",
       trustScore: 80,
+      autoPublish: true,
     });
     expect(
       await testDb.auditLog.findFirst({ where: { action: "retailer.update", actorId: admin.id } }),

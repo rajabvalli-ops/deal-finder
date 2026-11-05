@@ -1,7 +1,7 @@
 import { site } from "@/lib/site";
 
 export function AffiliateDisclosure({ compact = false }: { compact?: boolean }) {
-  const text = `${site.name} may earn a commission if you buy through links on this site. It doesn't change the price you pay, and deals are chosen by price history, not by commission.`;
+  const text = `${site.name} may earn a commission if you buy through links on this site. It doesn't change the price you pay, and deals are chosen by price history, not by commission. As an Amazon Associate, ${site.name} earns from qualifying purchases.`;
   if (compact) return <p className="text-xs text-ink-muted">{text}</p>;
   return (
     <aside

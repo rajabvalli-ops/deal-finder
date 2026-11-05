@@ -42,6 +42,7 @@ export function createPublicRepository(client: DbClient) {
       categoryIds?: string[];
       retailerId?: string;
       featuredOnly?: boolean;
+      bigDropsOnly?: boolean;
       excludeId?: string;
       sort: keyof typeof ORDER;
       skip: number;
@@ -50,6 +51,7 @@ export function createPublicRepository(client: DbClient) {
       const where: Prisma.DealWhereInput = {
         ...PUBLIC_DEAL_WHERE,
         ...(filter.featuredOnly ? { isFeatured: true } : {}),
+        ...(filter.bigDropsOnly ? { level: { in: ["BIG_DROP", "PRICE_ERROR"] } } : {}),
         ...(filter.retailerId ? { retailerId: filter.retailerId } : {}),
         ...(filter.excludeId ? { id: { not: filter.excludeId } } : {}),
         ...(filter.categoryIds

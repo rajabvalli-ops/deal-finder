@@ -20,7 +20,7 @@ import { computePriceStats } from "@/server/pricing";
 const DAY_MS = 86_400_000;
 const CHART_DAYS = 180;
 
-function toSummary(row: PublicDealRow): PublicDealSummary {
+export function toSummary(row: PublicDealRow): PublicDealSummary {
   const category = row.product.category;
   return {
     slug: row.slug,
@@ -35,6 +35,7 @@ function toSummary(row: PublicDealRow): PublicDealSummary {
     savingAmount: row.savingAmount,
     discountBps: row.discountBps,
     historicalLow: row.historicalLow,
+    level: row.level,
     priceCheckedAt: row.product.priceUpdatedAt,
     publishedAt: row.publishedAt,
   };
@@ -49,11 +50,14 @@ export function createPublicCatalogueService(client: DbClient) {
       page: PageRequest;
       categoryIds?: string[];
       retailerId?: string;
+      /** Only big drops and possible price errors. */
+      bigDropsOnly?: boolean;
     }): Promise<Page<PublicDealSummary>> {
       const { items, total } = await repo.listDeals({
         sort: params.sort,
         categoryIds: params.categoryIds,
         retailerId: params.retailerId,
+        bigDropsOnly: params.bigDropsOnly,
         skip: params.page.skip,
         take: params.page.take,
       });

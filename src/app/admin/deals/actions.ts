@@ -1,9 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { dealActionSchema, dealContentSchema } from "@/lib/validation/admin";
+import { after } from "next/server";
+import { dealActionSchema, dealContentSchema, dealIdSchema } from "@/lib/validation/admin";
 import { requireRole } from "@/server/auth";
-import { adminDeals } from "@/server/services/admin";
+import { adminDeals, postDealToSocial } from "@/server/services/admin";
+import { alertMatching } from "@/server/services/alerts";
 import { backTo, formObject } from "../_lib/redirect";
 
 export async function dealAction(formData: FormData): Promise<void> {
@@ -13,7 +15,18 @@ export async function dealAction(formData: FormData): Promise<void> {
   if (!parsed.success) backTo(returnTo, "/admin/deals", { error: "INVALID_INPUT" });
 
   const { dealId, action, reason } = parsed.data;
-  const result = await adminDeals.applyAction({ actor, dealId, action, reason, now: new Date() });
+  const now = new Date();
+  const result = await adminDeals.applyAction({ actor, dealId, action, reason, now });
+  if (result.ok && action === "publish") {
+    // Notify matching alerts straight away; the process-alerts job catches anything missed.
+    after(async () => {
+      try {
+        await alertMatching.matchDeals({ now, since: new Date(0), dealIds: [dealId] });
+      } catch (error) {
+        console.error(`Alert matching failed for deal ${dealId}`, error);
+      }
+    });
+  }
   // Refresh cached public pages as well as the admin.
   revalidatePath("/", "layout");
   backTo(
@@ -37,5 +50,19 @@ export async function updateDealContent(formData: FormData): Promise<void> {
     returnTo,
     `/admin/deals/${dealId}`,
     result.ok ? { notice: "saved" } : { error: result.error },
+  );
+}
+
+export async function postDealToX(formData: FormData): Promise<void> {
+  await requireRole("EDITOR", "/admin/deals");
+  const returnTo = formData.get("returnTo");
+  const parsed = dealIdSchema.safeParse(formObject(formData));
+  if (!parsed.success) backTo(returnTo, "/admin/deals", { error: "INVALID_INPUT" });
+  const { dealId } = parsed.data;
+  const result = await postDealToSocial(dealId, new Date());
+  backTo(
+    returnTo,
+    `/admin/deals/${dealId}`,
+    result.ok ? { notice: "posted" } : { error: result.error },
   );
 }

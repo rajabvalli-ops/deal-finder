@@ -9,7 +9,7 @@ import { allowedActions, isEditable } from "@/server/deals/workflow";
 import { getDealDetail } from "@/server/services/admin";
 import { ActionMessages } from "../../_lib/messages";
 import { param, type SearchParams } from "../../_lib/params";
-import { dealAction, updateDealContent } from "../actions";
+import { dealAction, postDealToX, updateDealContent } from "../actions";
 
 export const metadata: Metadata = { title: "Deal" };
 
@@ -91,6 +91,7 @@ export default async function AdminDealPage({
           ],
           ["Saving", `${formatPrice(deal.savingAmount)} (${formatBps(deal.discountBps)})`],
           ["Score", `${deal.score} / 100`],
+          ["Level", humanise(deal.level)],
         ].map(([label, value]) => (
           <div key={label} className="rounded-lg border border-line p-3">
             <span className="block text-sm text-ink-muted">{label}</span>
@@ -147,6 +148,77 @@ export default async function AdminDealPage({
           </div>
         </section>
       ) : null}
+
+      <section className="space-y-3" aria-labelledby="x-heading">
+        <h2 id="x-heading" className="text-lg font-semibold">
+          X posts
+        </h2>
+        {deal.status === "PUBLISHED" ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <a
+              href={`/admin/deals/${deal.id}/tweet`}
+              target="_blank"
+              rel="noopener"
+              className="rounded-md bg-ink px-4 py-2 font-medium text-surface hover:opacity-90"
+            >
+              Tweet this (opens X)
+            </a>
+            {detail.socialEnabled ? (
+              <form action={postDealToX}>
+                <input type="hidden" name="dealId" value={deal.id} />
+                <input type="hidden" name="returnTo" value={returnTo} />
+                <button
+                  type="submit"
+                  className="rounded-md border border-line px-4 py-2 font-medium hover:border-brand-600"
+                >
+                  Post to X automatically
+                </button>
+              </form>
+            ) : null}
+          </div>
+        ) : null}
+        <p className="text-sm text-ink-muted">
+          {detail.socialEnabled
+            ? "Big drops and price errors are posted automatically through X's API."
+            : "Posting to X is manual: “Tweet this” opens X with the post written for you. With notifications on, editors get a “tap to tweet” alert for each big drop and price error."}
+        </p>
+        {detail.socialPosts.length > 0 ? (
+          <ul className="divide-y divide-line rounded-md border border-line text-sm">
+            {detail.socialPosts.map((p) => (
+              <li key={p.id} className="space-y-1 p-3">
+                <p>
+                  <strong>
+                    {p.network === "x-share"
+                      ? p.status === "POSTED"
+                        ? "Sent to editors to tweet"
+                        : humanise(p.status)
+                      : humanise(p.status)}
+                  </strong>{" "}
+                  · {humanise(p.level)}
+                  {p.postedAt ? ` · ${formatDateTime(p.postedAt)}` : ""}
+                  {p.externalId ? (
+                    <>
+                      {" · "}
+                      <a
+                        href={`https://x.com/i/web/status/${encodeURIComponent(p.externalId)}`}
+                        className="text-brand-600 hover:underline"
+                        rel="noopener"
+                        target="_blank"
+                      >
+                        View on X
+                      </a>
+                    </>
+                  ) : null}
+                </p>
+                {p.lastError && p.status !== "POSTED" ? (
+                  <p className="text-red-800">{p.lastError}</p>
+                ) : null}
+                {p.text ? <pre className="whitespace-pre-wrap text-ink-muted">{p.text}</pre> : null}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </section>
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Why it was flagged</h2>

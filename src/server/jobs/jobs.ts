@@ -6,6 +6,13 @@ import type { DbClient, Retailer } from "@/server/db/types";
 import { ACTIVE_DEAL_STATUSES } from "@/server/deals/workflow";
 import { createAdapter, type RetailerAdapter } from "@/server/retailers";
 import {
+  createAlertMatchingService,
+  type MatchSummary,
+} from "@/server/services/alerts/alert-matching.service";
+import { pushDeliveryFromEnv } from "@/server/services/alerts/push-delivery.service";
+import { sharePushFromEnv } from "@/server/social/share-push.service";
+import { socialPostingFromEnv, type SocialSummary } from "@/server/social/social-posting.service";
+import {
   createDealDetectionService,
   type DetectionSummary,
 } from "@/server/services/deals/deal-detection.service";
@@ -23,6 +30,8 @@ export const JOB_NAMES = [
   "refresh-prices",
   "detect-deals",
   "expire-deals",
+  "process-alerts",
+  "post-social",
 ] as const;
 export type JobName = (typeof JOB_NAMES)[number];
 
@@ -45,6 +54,8 @@ export type JobSettings = {
   pricesPerRetailerPerRun: number;
   /** detect-deals looks at listings priced within this window. */
   detectWindowMs: number;
+  /** process-alerts matches deals published within this window (overlap makes missed runs harmless). */
+  alertWindowMs: number;
 };
 
 export const DEFAULT_JOB_SETTINGS: JobSettings = {
@@ -53,6 +64,7 @@ export const DEFAULT_JOB_SETTINGS: JobSettings = {
   delistAfterMs: 3 * DAY_MS,
   pricesPerRetailerPerRun: 200,
   detectWindowMs: 26 * 3_600_000,
+  alertWindowMs: 26 * 3_600_000,
 };
 
 type RetailerOutcome = {
@@ -71,6 +83,11 @@ export type JobReport =
       status: "completed";
       retailers?: RetailerOutcome[];
       deals?: Omit<DetectionSummary, "errors"> & { errors: number };
+      alerts?: MatchSummary;
+      /** Automatic X posts; absent when the X API keys aren't set. */
+      social?: SocialSummary;
+      /** "Tap to tweet" pushes to editors; used when push is set up but X's API isn't. */
+      share?: SocialSummary;
     }
   | { job: JobName; status: "skipped"; reason: string };
 
@@ -79,7 +96,43 @@ const LEASES: Record<JobName, number> = {
   "refresh-prices": 15 * MINUTE_MS,
   "detect-deals": 10 * MINUTE_MS,
   "expire-deals": 10 * MINUTE_MS,
+  "process-alerts": 10 * MINUTE_MS,
+  "post-social": 10 * MINUTE_MS,
 };
+
+/**
+ * Notifies alerts about deals just published (auto-publish retailers) or raised to a higher
+ * level. Runs after every detection pass so pings go out within the same job.
+ */
+function notifyAlerts(ctx: JobContext, settings: JobSettings): Promise<MatchSummary> {
+  return createAlertMatchingService(ctx.client, {
+    push: pushDeliveryFromEnv(ctx.client, ctx.env),
+  }).matchDeals({
+    now: ctx.now,
+    since: new Date(ctx.now.getTime() - settings.alertWindowMs),
+  });
+}
+
+/**
+ * Posts newly published big drops and price errors to X: automatically when the X API keys
+ * are set, otherwise as "tap to tweet" pushes to editors when push is set up.
+ */
+async function postToSocial(
+  ctx: JobContext,
+  settings: JobSettings,
+): Promise<{ social?: SocialSummary; share?: SocialSummary }> {
+  const since = new Date(ctx.now.getTime() - settings.alertWindowMs);
+  const social = socialPostingFromEnv(ctx.client, ctx.env);
+  if (social) return { social: await social.run({ now: ctx.now, since }) };
+  const share = sharePushFromEnv(ctx.client, ctx.env);
+  if (share) return { share: await share.run({ now: ctx.now, since }) };
+  return {};
+}
+
+/** After a detection pass: notify alerts, then post to social. */
+async function announce(ctx: JobContext, settings: JobSettings) {
+  return { alerts: await notifyAlerts(ctx, settings), ...(await postToSocial(ctx, settings)) };
+}
 
 function summarise(summary: DetectionSummary) {
   const { errors, ...counts } = summary;
@@ -153,7 +206,7 @@ const JOBS: Record<
       now: ctx.now,
       since: ctx.now,
     });
-    return { retailers, deals: summarise(deals) };
+    return { retailers, deals: summarise(deals), ...(await announce(ctx, settings)) };
   },
 
   /** Re-prices the most important listings of each retailer, then detects deals on them. */
@@ -180,7 +233,7 @@ const JOBS: Record<
       now: ctx.now,
       since: ctx.now,
     });
-    return { retailers, deals: summarise(deals) };
+    return { retailers, deals: summarise(deals), ...(await announce(ctx, settings)) };
   },
 
   async "detect-deals"(ctx, settings) {
@@ -189,12 +242,22 @@ const JOBS: Record<
       now: ctx.now,
       since,
     });
-    return { deals: summarise(deals) };
+    return { deals: summarise(deals), ...(await announce(ctx, settings)) };
   },
 
   async "expire-deals"(ctx) {
     const deals = await createDealDetectionService(ctx.client).verifyActive({ now: ctx.now });
     return { deals: summarise(deals) };
+  },
+
+  /** Notifies users whose alerts match recently published deals. */
+  async "process-alerts"(ctx, settings) {
+    return { alerts: await notifyAlerts(ctx, settings) };
+  },
+
+  /** Catch-up for social posting (detection passes already post as they go). */
+  async "post-social"(ctx, settings) {
+    return postToSocial(ctx, settings);
   },
 };
 

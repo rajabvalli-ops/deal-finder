@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Deal Broker app icon: the "DB" monogram with a tag, black on lime, matching the
+       @Dealbrokerr profile picture. Content sits inside the central safe zone, so the
+       full-bleed square also works as a maskable icon. -->
+  <rect width="512" height="512" fill="#c7fe2e"/>
+  <g transform="translate(256 124) rotate(45)">
+    <path d="M-46 0 L-20 -30 H38 a10 10 0 0 1 10 10 V20 a10 10 0 0 1 -10 10 H-20 Z"
+          fill="none" stroke="#000000" stroke-width="11" stroke-linejoin="round"/>
+    <circle cx="-14" cy="0" r="7" fill="#000000"/>
+  </g>
+  <text x="256" y="338" text-anchor="middle" font-family="Arial Black, Arial, Helvetica, sans-serif"
+        font-weight="900" font-size="176" letter-spacing="-2" fill="#000000" stroke="#000000" stroke-width="14" stroke-linejoin="round">DB</text>
+  <text x="256" y="388" text-anchor="middle" font-family="Arial, Helvetica, sans-serif"
+        font-weight="700" font-size="25" letter-spacing="7" fill="#000000">DEAL BROKER</text>
+</svg>

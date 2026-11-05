@@ -19,6 +19,8 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       include: [
+        "src/lib/alerts.ts",
+        "src/lib/social.ts",
         "src/lib/money.ts",
         "src/lib/outbound.ts",
         "src/lib/slug.ts",
@@ -32,6 +34,9 @@ export default defineConfig({
         "src/server/affiliate/**",
         "src/server/auth/roles.ts",
         "src/server/rate-limit/**",
+        "src/server/push/**",
+        "src/server/social/x-client.ts",
+        "src/server/social/config.ts",
         "src/server/jobs/cron-auth.ts",
         "src/server/pricing/**",
         "src/server/deals/engine/**",

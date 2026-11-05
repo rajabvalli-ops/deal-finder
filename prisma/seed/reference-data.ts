@@ -39,3 +39,17 @@ export const mockRetailer = {
   adapterKey: "mock",
   integrationType: "MOCK",
 } as const;
+
+/**
+ * Amazon UK through the Creators API (Stage 14). Seeded paused and tracking nothing: an admin
+ * adds products and searches, and it only runs once the credentials are set (see README).
+ * Re-seeding never changes its status, trust score or tracking list.
+ */
+export const amazonRetailer = {
+  slug: "amazon-uk",
+  name: "Amazon UK",
+  websiteUrl: "https://www.amazon.co.uk",
+  description: "Amazon.co.uk, through the Amazon Associates Creators API.",
+  adapterKey: "amazon",
+  integrationType: "RETAILER_API",
+} as const;

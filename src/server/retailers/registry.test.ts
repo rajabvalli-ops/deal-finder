@@ -10,7 +10,7 @@ const context = { now: () => new Date(0), env: {} };
 
 describe("adapter registry", () => {
   it("lists registered adapters", () => {
-    expect(registeredAdapterKeys()).toEqual(["mock"]);
+    expect(registeredAdapterKeys()).toEqual(["amazon", "mock"]);
   });
 
   it("creates an adapter from a retailer row, treating null config as empty", () => {

@@ -2,6 +2,16 @@ import type { PriceStats } from "@/server/pricing";
 
 export type ReferenceType = "PREVIOUS" | "AVG_30" | "AVG_90";
 
+/** NORMAL < BIG_DROP < PRICE_ERROR, from the discount against the reference price. */
+export type DealLevel = "NORMAL" | "BIG_DROP" | "PRICE_ERROR";
+
+export type DealLevelThresholds = {
+  /** Discount (bps) from which a deal is a big drop. */
+  bigDropBps: number;
+  /** Discount (bps) from which the price is likely a mistake. */
+  priceErrorBps: number;
+};
+
 export type DealThresholds = {
   /** Minimum discount against the reference price, in basis points. */
   minDiscountBps: number;
@@ -22,6 +32,7 @@ export type DealEngineConfig = {
   thresholds: DealThresholds;
   /** Per-category overrides, keyed by category slug. */
   categoryThresholds: Readonly<Record<string, Partial<DealThresholds>>>;
+  levels: DealLevelThresholds;
 };
 
 export type DealEvaluationInput = {
@@ -57,6 +68,7 @@ export type DealCandidate = {
   avg90Price: number | null;
   score: number;
   scoreBreakdown: ScoreBreakdown;
+  level: DealLevel;
   /** Human-readable explanation for reviewers. */
   reasons: string[];
   engineVersion: string;

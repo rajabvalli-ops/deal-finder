@@ -3,6 +3,9 @@
 
 export type ReferenceType = "PREVIOUS" | "AVG_30" | "AVG_90";
 
+/** How striking a deal is: a big drop (35%+) or a possible price error (70%+). */
+export type DealLevel = "NORMAL" | "BIG_DROP" | "PRICE_ERROR";
+
 export type PublicDealSummary = {
   slug: string;
   title: string;
@@ -17,6 +20,7 @@ export type PublicDealSummary = {
   savingAmount: number;
   discountBps: number;
   historicalLow: number | null;
+  level: DealLevel;
   /** When the listing's price was last checked. */
   priceCheckedAt: Date | null;
   publishedAt: Date | null;
@@ -50,6 +54,12 @@ export type PublicDealDetail = PublicDealSummary & {
 };
 
 export type PublicCategory = { slug: string; name: string; dealCount: number };
+
+/** Filter choices on the search page. `depth` is 0 for top-level categories. */
+export type SearchOptions = {
+  categories: { slug: string; name: string; depth: number }[];
+  retailers: { slug: string; name: string }[];
+};
 export type PublicRetailer = { slug: string; name: string; dealCount: number };
 
 export const DEAL_SORTS = ["newest", "discount", "saving", "top"] as const;

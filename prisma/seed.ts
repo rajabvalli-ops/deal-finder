@@ -11,9 +11,7 @@ const includeDevelopmentData = process.env.NODE_ENV !== "production";
 
 try {
   const result = await runSeed(prisma, { includeDevelopmentData });
-  console.log(
-    `Seeded ${result.categoryCount} categories and ${result.retailerCount} development retailer(s).`,
-  );
+  console.log(`Seeded ${result.categoryCount} categories and ${result.retailerCount} retailer(s).`);
 } finally {
   await prisma.$disconnect();
 }

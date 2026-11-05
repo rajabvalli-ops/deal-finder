@@ -7,7 +7,7 @@ import type { DbClient } from "@/server/db/types";
 import { isEditable, transition, type DealAction } from "@/server/deals/workflow";
 import { fail, ok, type Actor, type AdminResult } from "./result";
 
-export type EditorDealAction = Exclude<DealAction, "submit">;
+export type EditorDealAction = Exclude<DealAction, "submit" | "auto-publish">;
 
 export type DealContent = {
   title: string;

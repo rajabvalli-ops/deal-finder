@@ -1,6 +1,6 @@
 import { Pagination } from "@/components/admin/pagination";
 import { formatDateTime } from "@/lib/format";
-import { formatBps, formatPrice } from "@/lib/money";
+import { alertCondition, alertWatching } from "@/lib/alerts";
 import { pageRequest, toPage } from "@/lib/pagination";
 import { adminReads } from "@/server/services/admin";
 import type { SearchParams } from "../_lib/params";
@@ -16,7 +16,8 @@ export default async function AdminAlertsPage({ searchParams }: { searchParams: 
     <div className="space-y-4">
       <h1 className="text-2xl font-bold">Alerts</h1>
       <p className="text-sm text-ink-muted">
-        {total} alert{total === 1 ? "" : "s"}. Users create alerts once price alerts launch.
+        {total} alert{total === 1 ? "" : "s"}. Users manage their own alerts at /alerts; the
+        process-alerts job notifies them.
       </p>
       {items.length > 0 ? (
         <div className="overflow-x-auto">
@@ -35,23 +36,14 @@ export default async function AdminAlertsPage({ searchParams }: { searchParams: 
                 <tr key={a.id} className="border-t border-line">
                   <td className="py-2 pr-4">{a.user.email}</td>
                   <td className="py-2 pr-4">
-                    {[
-                      a.keyword && `“${a.keyword}”`,
-                      a.product?.title,
-                      a.category?.name,
-                      a.retailer?.name,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
+                    {alertWatching({
+                      keyword: a.keyword,
+                      productTitle: a.product?.title ?? null,
+                      categoryName: a.category?.name ?? null,
+                      retailerName: a.retailer?.name ?? null,
+                    })}
                   </td>
-                  <td className="py-2 pr-4">
-                    {[
-                      a.maxPrice !== null && `≤ ${formatPrice(a.maxPrice)}`,
-                      a.minDiscountBps !== null && `≥ ${formatBps(a.minDiscountBps)} off`,
-                    ]
-                      .filter(Boolean)
-                      .join(", ") || "Any price"}
-                  </td>
+                  <td className="py-2 pr-4">{alertCondition(a)}</td>
                   <td className="py-2 pr-4">{a.isActive ? "Yes" : "No"}</td>
                   <td className="py-2 pr-4 whitespace-nowrap">
                     {formatDateTime(a.lastTriggeredAt)}

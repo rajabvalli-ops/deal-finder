@@ -6,7 +6,10 @@ export const maxDuration = 60;
 
 const noStore = { "Cache-Control": "no-store" };
 
-/** Vercel Cron calls GET with `Authorization: Bearer $CRON_SECRET`. */
+/**
+ * Called on a schedule by GitHub Actions (.github/workflows/scheduled-jobs.yml) with
+ * `Authorization: Bearer $CRON_SECRET`; any scheduler sending that header works.
+ */
 export async function GET(request: Request, { params }: { params: Promise<{ job: string }> }) {
   if (!env.CRON_SECRET) {
     return Response.json({ error: "Cron is not configured" }, { status: 503, headers: noStore });

@@ -58,7 +58,7 @@ later if ever needed.
                            │ PostgreSQL   │  │ Retailer APIs /  │  │ Email provider│
                            │ (Neon etc.)  │  │ affiliate feeds  │  │ (TBD)         │
                            └──────────────┘  └──────────────────┘  └───────────────┘
-      Vercel Cron ──► /api/cron/*  (import · price refresh · detect · expire · alerts)
+  GitHub Actions ──► /api/cron/*  (import · price refresh · detect · expire · alerts · X)
       Redis (Upstash, optional) ──► rate limiting, locks, cache
 ```
 
@@ -193,7 +193,7 @@ Key principles:
 >   discount 0–10 000 bps, score 0–100, alert needs a keyword/product/category, category
 >   not its own parent), plus partial unique indexes for **one default variant per
 >   product** and **one active deal per variant**.
-> - Full-text search indexes are deferred to the search stage.
+> - Full-text search indexes were added in Stage 12 (see §5, Search).
 
 ```prisma
 generator client {
@@ -641,8 +641,9 @@ Notes:
 - `Product.affiliateUrl` from the spec is deliberately **not** a column on Product:
   it is represented by `AffiliateLink` (see §10), so there is one central place for
   outbound URLs.
-- Full-text search: a generated `tsvector` column + GIN index and `pg_trgm` index on
-  `Product.title`/`brand`/`model` added via raw SQL migration.
+- Full-text search (Stage 12): an immutable SQL function `product_search_document(title,
+brand, model, description)` with a GIN expression index, plus a `pg_trgm` GIN index on
+  `lower(title)`, added via raw SQL migration. No extra column, so Prisma's schema is unchanged.
 - `PriceHistory` is the only high-volume table. Writing on change + daily heartbeat
   keeps it modest; monthly range partitioning can be added later without app changes.
 
@@ -753,21 +754,20 @@ The app favours **Server Components for reads** and **Server Actions for admin
 mutations**, so there is little need for a large JSON API. Route Handlers exist
 where an HTTP endpoint is genuinely required.
 
-| Endpoint                       | Method         | Auth                 | Purpose                               |
-| ------------------------------ | -------------- | -------------------- | ------------------------------------- |
-| `/go/[code]`                   | GET / HEAD     | public, rate-limited | Record click, 302 to retailer         |
-| `/api/auth/[...all]`           | *              | —                    | Better Auth                           |
-| `/api/alerts`                  | GET / POST     | user                 | List / create alerts                  |
-| `/api/alerts/[id]`             | PATCH / DELETE | owner                | Update / delete alert                 |
-| `/api/search`                  | GET            | public, rate-limited | JSON search for client-side filter UI |
-| `/api/cron/import`             | POST           | `CRON_SECRET`        | Catalogue import per retailer         |
-| `/api/cron/refresh-prices`     | POST           | `CRON_SECRET`        | Price refresh                         |
-| `/api/cron/detect-deals`       | POST           | `CRON_SECRET`        | Run deal engine                       |
-| `/api/cron/expire-deals`       | POST           | `CRON_SECRET`        | Expire stale deals                    |
-| `/api/cron/process-alerts`     | POST           | `CRON_SECRET`        | Match alerts → queue notifications    |
-| `/api/cron/send-notifications` | POST           | `CRON_SECRET`        | Deliver queued notifications          |
-| `/api/health`                  | GET            | public               | Liveness + DB check                   |
-| `/api/v1/*`                    | —              | API key              | _Future_ public/partner API           |
+| Endpoint                       | Method     | Auth                 | Purpose                               |
+| ------------------------------ | ---------- | -------------------- | ------------------------------------- |
+| `/go/[code]`                   | GET / HEAD | public, rate-limited | Record click, 302 to retailer         |
+| `/api/auth/[...all]`           | *          | —                    | Better Auth                           |
+| `/api/search`                  | GET        | public, rate-limited | JSON search for client-side filter UI |
+| `/api/cron/import`             | POST       | `CRON_SECRET`        | Catalogue import per retailer         |
+| `/api/cron/refresh-prices`     | POST       | `CRON_SECRET`        | Price refresh                         |
+| `/api/cron/detect-deals`       | POST       | `CRON_SECRET`        | Run deal engine                       |
+| `/api/cron/expire-deals`       | POST       | `CRON_SECRET`        | Expire stale deals                    |
+| `/api/cron/process-alerts`     | POST       | `CRON_SECRET`        | Match alerts → in-app notifications   |
+| `/api/cron/post-social`        | POST       | `CRON_SECRET`        | Post big drops / price errors to X    |
+| `/api/cron/send-notifications` | POST       | `CRON_SECRET`        | _Future:_ deliver queued emails       |
+| `/api/health`                  | GET        | public               | Liveness + DB check                   |
+| `/api/v1/*`                    | —          | API key              | _Future_ public/partner API           |
 
 ### Admin dashboard (implemented in Stage 9)
 
@@ -780,7 +780,7 @@ where an HTTP endpoint is genuinely required.
 | `/admin/retailers`         | ADMIN edits | Status (active/paused/disabled) and trust score; editors see read-only                                               |
 | `/admin/categories`        | ADMIN edits | Tree view, create (slug from name), rename/move/reorder (slug fixed, cycles refused)                                 |
 | `/admin/users`             | ADMIN only  | Search/filter, change roles (not your own; never the last admin); 404 for editors                                    |
-| `/admin/alerts`            | EDITOR+     | Read-only list (populated by the alerts stage)                                                                       |
+| `/admin/alerts`            | EDITOR+     | Read-only list of every user's alerts (users manage their own on `/alerts`) — Stage 13                               |
 | `/admin/clicks`            | EDITOR+     | 7-day clicks by people vs likely bots, most-clicked deals, click list (bots hidden unless asked for) — Stage 11      |
 
 Server Actions (`src/app/admin/**/actions.ts`): `dealAction` (approve / reject with a required
@@ -808,6 +808,7 @@ HTTP status in one helper; no Prisma types leak to the UI (services return DTOs)
 | `/deals/[slug]`      | ISR (rendered on first visit, 5 min) | Price, named comparison, price-checked time, 180-day chart, 7/30/90-day averages, low/high, product info, related deals, disclosure |
 | `/categories/[slug]` | Dynamic                              | Deals in the category and its subcategories, subcategory links                                                                      |
 | `/retailers/[slug]`  | Dynamic                              | The retailer's deals (disabled retailers 404)                                                                                       |
+| `/search`            | Dynamic (GET form, no JavaScript)    | Keyword search and filters over live deals — Stage 12, see below                                                                    |
 
 - **What is public:** only `PUBLISHED` deals whose product is active and whose retailer is
   `ACTIVE`; anything else 404s. `src/server/services/public/` maps rows to plain types in
@@ -902,6 +903,169 @@ Nothing else changes: ingestion, pricing, deals, admin, public pages, affiliate 
 alerts all operate on normalised data keyed by `retailerId`. A further merchant on an
 already-supported affiliate network needs **no new code** — only another `Retailer` row with a
 different `adapterConfig`.
+
+### Amazon UK (implemented in Stage 14)
+
+`src/server/retailers/adapters/amazon/` — `client.ts` (HTTP + auth), `normalise.ts`,
+`index.ts` (the adapter); admin page `src/app/admin/retailers/[id]/page.tsx`.
+
+- **Data source: the Amazon Associates Creators API**, the replacement Amazon announced for
+  Product Advertising API 5.0 (retired in 2026). No scraping: Amazon's Conditions of Use
+  forbid it, and Associates may only show Amazon prices that come from Amazon's API.
+- **Auth:** OAuth 2.0 client credentials. The credential version Amazon issues picks the token
+  endpoint: 2.x (Cognito; form-encoded; scope `creatorsapi/default`; `Authorization: Bearer
+<token>, Version <v>`) or 3.x (Login with Amazon; JSON; scope `creatorsapi::default`;
+  `Authorization: Bearer <token>`). Tokens are cached until a minute before expiry; a 401 gets
+  one fresh token. Secrets come only from the environment (`AMAZON_CREATORS_*`,
+  `AMAZON_ASSOCIATE_TAG`); with any missing, the adapter refuses to call Amazon and the admin
+  page lists what is missing.
+- **Calls:** `POST https://creatorsapi.amazon/catalog/v1/getItems` (≤ 10 ASINs) and
+  `/catalog/v1/searchItems` (≤ 10 items a page), header `x-marketplace: www.amazon.co.uk`,
+  camelCase bodies with `partnerTag`, `resources` (`itemInfo.*`, `images.primary.large`,
+  `offersV2.listings.*`…). One request at a time with 1.1 s between requests (Amazon's
+  starting allowance is about 1 per second); 429 and 5xx are retried with back-off
+  (honouring `Retry-After`); 404 means "no results".
+- **Catalogue:** Amazon offers no full catalogue to Associates, so an admin chooses what to
+  track on the retailer's page: ASINs (or pasted amazon.co.uk product links) and keyword
+  searches (department, Amazon's own minimum-saving filter, up to 10 pages). The cursor walks
+  the ASIN list in batches, then each search page by page.
+- **Prices:** the new-condition Buy Box offer from `offersV2` (pounds → pence); no offer means
+  out of stock. Amazon's own "was"/list prices are ignored: discounts are always measured
+  against our own price history, so a new product needs 14 days of history before it can be
+  a deal.
+- **Links:** product URLs are stored as `https://www.amazon.co.uk/dp/<ASIN>`; the outbound
+  link adds `?tag=<AMAZON_ASSOCIATE_TAG>` and nothing else. Without a valid tag no link is
+  built, so an untagged (unpaid) link can't go out.
+- **Compliance notes:** the site-wide disclosure includes "As an Amazon Associate, Deal Broker
+  earns from qualifying purchases."; every price shows when it was checked; `refresh-prices`
+  re-checks tracked items every 3 hours. Amazon's terms restrict Associates links in emails —
+  alerts link to our own deal pages, never straight to Amazon.
+- **Verification status:** request and response shapes follow Amazon's published API models
+  (as used by the open-source Creators API SDKs) and are tested against an in-memory fake
+  API (`fake-api.test-kit.ts`). **They have not yet been run against Amazon itself** — that
+  needs real credentials. Expect to adjust field mappings on first contact.
+- **Seeded** as `amazon-uk`, status PAUSED, trust 80, tracking nothing; re-seeding never
+  changes its status, trust or tracking list.
+
+### Deal levels, auto-publish and push (implemented in Stage 14)
+
+- **Levels** (deal engine `deal-engine@2`, deterministic): `BIG_DROP` from 35% below the
+  reference price, `PRICE_ERROR` ("possible price error") from 70%. Stored on `Deal.level`;
+  when a deeper drop raises the level of an existing deal, `levelRaisedAt` is set and alerts
+  fire again (dedupe key `<alert>:<deal>:<level>`). Badges on cards and deal pages, a warning
+  that price errors are often cancelled, and a `/price-drops` page.
+- **Auto-publish** (per retailer, admin setting): new deals go `PENDING_REVIEW → PUBLISHED`
+  through the system-only `auto-publish` transition, audited. Every detection pass
+  (`import-catalogue`, `refresh-prices`, `detect-deals`) now runs alert matching straight
+  after, so a price error found by the 3-hourly refresh notifies people in the same run.
+- **Alerts** can ask for big drops or possible price errors only (`Alert.minLevel`), with or
+  without a keyword/category — "every price error" is one click on `/alerts`.
+- **Browser push** (Web Push, VAPID): users turn it on per device on `/alerts`
+  (`public/sw.js` shows the notification and opens our deal page). Keys are generated by
+  `npm run push:keys`; no third-party account. Subscriptions are only accepted for the
+  browsers' own push services (Google, Mozilla, Apple, Microsoft hosts), so the server can't
+  be pointed at arbitrary URLs. Gone subscriptions (404/410) are dropped, as are ones failing
+  5 times in a row. Push is best effort: the in-app notification is stored first. Pushes are
+  short and price-first (`alertPushContent`): "🚨 Possible price error!" / "£3.06 for Oust
+  Descaler 18 Sachets · 85% off at Amazon UK", with the site icon, a status-bar badge and the
+  product photo where the platform shows one. A web app manifest (`src/app/manifest.ts`) lets
+  iPhone users add the site to their Home Screen, which iOS requires before it delivers push.
+  Icons are drawn in `assets/icons/*.svg` and rendered with `node assets/icons/render.mjs`.
+- **Brand:** the site is called **Deal Broker** (`src/lib/site.ts`), matching the owner's
+  social branding: near-black with lime `#C7FE2E` and the "DB" tag monogram. The frame
+  (header, homepage hero, icon) uses `--color-frame-*` and `--color-lime-*` in `globals.css`;
+  lime always carries black text. Content keeps the neutral palette; price-error badges stay red. Encryption
+  and VAPID signing are tested by decrypting a real payload; subscribing in a real browser
+  needs the browser's push service and has not been exercised here.
+
+### Posting deals to X (implemented in Stage 15)
+
+`src/lib/social.ts` (post text), `src/server/social/` (`x-client.ts`, `config.ts`,
+`social-posting.service.ts`), `SocialPost` table, admin deal page "X posts".
+
+- **What is posted:** public deals at `X_POST_MIN_LEVEL` or above (default: big drops and
+  possible price errors), once per deal and level — a big drop that later becomes a price
+  error is posted again. Price errors go first. Editors can "Post to X now" any live deal.
+- **When:** straight after every detection pass (after alerts), and by the hourly
+  `post-social` job. A rolling 24-hour cap (`X_DAILY_POST_LIMIT`, default 10) controls cost;
+  the rest wait for the next window. A deal that is no longer live by its turn is skipped.
+- **Text** is built from the engine's numbers: headline, price first, the comparison named
+  honestly ("Was" only for a real previous price, otherwise "30-day average"), a
+  cancellation warning on price errors, the link, and `#ad` (affiliate posts must be labelled
+  as ads). Fits X's 280-character count (URLs 23, emoji 2).
+- **Links** (`X_POST_LINKS`): `deal-page` (default; our page with the Amazon button,
+  price-checked time and disclosure), `retailer` (alias `amazon`; straight to the product's
+  affiliate link — for Amazon the tagged amazon.co.uk page, so X shows Amazon's preview; falls
+  back to the deal page if a product has none), or `none` — X charges much more for API posts
+  with a link.
+- **Tap to tweet (no X API, free):** without the X keys but with push set up, each post-worthy
+  deal is pushed to editors' and admins' devices ("🚨 Price error — tap to tweet"), at most 50 a
+  day, recorded as network `x-share`. The push opens `/admin/deals/<id>/tweet` (editors only),
+  which redirects to X's compose screen (`x.com/intent/post`) with the post filled in; a
+  person presses Post. Every live deal's admin page also has "Tweet this (opens X)". If no
+  editor has notifications on, the push is retried, then marked failed after 3 runs.
+- **API:** `POST https://api.x.com/2/tweets`, OAuth 1.0a user context (the brand account's
+  access token); the signer reproduces X's documented signature example. 429/401/5xx stop the
+  run and retry later; 403 (duplicate or refused) gives up; other errors give up after 3 tries.
+- **Not yet tested against X itself** — it needs the account's keys. Images are not attached.
+
+### Search (implemented in Stage 12)
+
+`src/lib/validation/search.ts` (parsing), `src/server/db/repositories/search.repository.ts`
+(SQL), `src/server/services/public/search.service.ts`, `src/app/(public)/search/page.tsx`.
+
+- **What is searched:** live deals only (the same visibility rule as the rest of the public
+  site). Products without a deal have no public page, so they are not search results.
+- **Matching:** each word of a plain query must match the product's text (title A, brand and
+  model B, description C; English stemming) **or** be a close typo of a word in the title
+  (`pg_trgm` word similarity ≥ 0.5). Stop words are skipped, but a query of only stop words
+  or punctuation matches nothing. Queries using operators — `"exact phrase"`, `-exclude`,
+  `OR` — use `websearch_to_tsquery` with no typo matching, so the operators mean what they say.
+  All values are bound parameters; there is no string-built SQL.
+- **Filters:** category (including subcategories), retailer, price range (pounds → pence),
+  minimum discount (10/20/30/50%), in stock (IN_STOCK or LOW_STOCK). Unknown or invalid values
+  are dropped rather than rejected, so shared links always render.
+- **Sorting:** best match (full-text rank + title similarity, then score), newest, biggest
+  discount, biggest saving, price low→high and high→low. Paged 24 at a time.
+- **SEO:** result pages (any keyword or filter) are `noindex, follow`; the bare page is indexable.
+- **Scale note:** the query starts from published deals, which stay few relative to the
+  catalogue. The indexes are ready for product-level search later; a JSON `/api/search` for a
+  client-side filter UI is not needed yet and was not built.
+
+### Alerts (implemented in Stage 13)
+
+`src/lib/validation/alerts.ts` (form), `src/lib/alerts.ts` (wording),
+`src/server/db/repositories/{alert,notification}.repository.ts`,
+`src/server/services/alerts/{alerts,alert-matching}.service.ts`, `src/app/(public)/alerts/`.
+
+- **Creating:** signed-in users (any role) create alerts on `/alerts` with Server Actions —
+  no JSON API. An alert needs a keyword, a category or a product; retailer, maximum price
+  and minimum discount (10/20/30/50%) narrow it. A product alert starts from a deal page
+  ("Get a price alert for this product" → `/alerts?deal=<slug>`), prefilled with the current
+  price; a search page links to `/alerts` prefilled with its keyword and filters. Keywords
+  with no searchable words ("the") are refused, as are unknown categories, inactive
+  retailers and deals that are no longer live. 25 alerts per account.
+- **Ownership:** every read and write is scoped to the session's user id (`updateMany` /
+  `deleteMany` with `userId`), so another user's id simply finds nothing. Signed-out
+  visitors see a sign-in prompt that returns them to the same `/alerts` URL.
+- **Matching (`findMatches`):** one SQL query pairs active alerts with **public** deals
+  published in the window, only if the alert existed when the deal was published (a new
+  alert never fires for deals already on the site). Keyword = all words in the product's
+  full-text document (no typo matching — notifications should be precise); category
+  includes all descendants (recursive CTE); price and discount use the engine's snapshot.
+  Pairs already notified are skipped.
+- **Delivery:** each match becomes an `IN_APP` `Notification` (status `SENT`, dedupe key
+  `<alertId>:<dealId>`, inserted with `ON CONFLICT DO NOTHING`) and the alert's
+  `lastTriggeredAt` is set. The text is built from the deal engine's numbers. The alerts
+  page lists the latest 50 with unread counts, mark-as-read and mark-all-read; a
+  notification links to its deal only while the deal is still public.
+- **Triggers:** publishing a deal in the admin runs matching for that deal straight after the
+  response (`after()`); the `process-alerts` job (hourly) re-checks the last 26 hours, so a
+  failed or missed run is caught up. Batches of 2 000 matches; the rest follow next run.
+- **Not built yet — email.** Sending email needs a provider account and key (open decision 7).
+  When one is chosen: add `EMAIL` notifications as `PENDING`, a `Notifier` for the provider,
+  a `send-notifications` job with retries (`attempts`, `lastError`), opt-in per alert and a
+  one-click unsubscribe (PECR). No email is sent or simulated today.
 
 ---
 
@@ -998,12 +1162,14 @@ lists match. Only PUBLISHED deals appear on the public site.
 ## 8. Background-job architecture
 
 **Implemented in Stage 7** (`src/server/jobs/`, `src/server/services/deals/`,
-`src/app/api/cron/[job]/route.ts`, `vercel.json`). Alert and notification jobs come with the
-alerts stage.
+`src/app/api/cron/[job]/route.ts`, `.github/workflows/scheduled-jobs.yml`). `process-alerts`
+was added in Stage 13, `post-social` in Stage 15. The schedules moved from `vercel.json` to
+GitHub Actions because Vercel's free plan only allows daily cron jobs.
 
 ### Mechanism
 
-- **Trigger:** Vercel Cron calls `GET /api/cron/<job>` with `Authorization: Bearer $CRON_SECRET`.
+- **Trigger:** a scheduled GitHub Actions workflow calls `GET /api/cron/<job>` on the live site
+  with `Authorization: Bearer $CRON_SECRET` (repository secrets `SITE_URL`, `CRON_SECRET`).
   The token is compared in constant time (both sides SHA-256 hashed). No secret configured →
   `503`; wrong or missing token → `401` (before revealing whether the job exists); unknown
   job → `404`. Responses are `no-store`; `maxDuration` is 60s.
@@ -1023,12 +1189,14 @@ WHERE lockedUntil <= now`), atomic across instances and safe behind connection p
 
 ### Jobs
 
-| Job                | Schedule (`vercel.json`, UTC) | What it does                                                                                                                                                                                                         |
-| ------------------ | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `import-catalogue` | daily 04:17                   | Per active retailer: import (or resume) the catalogue. After a **complete** pass, mark listings not seen for 3 days inactive. Then run deal detection on everything just priced.                                     |
-| `refresh-prices`   | every 3 h at :07              | Per active retailer with price lookup: re-price listings with active deals first, then the least recently priced. Then run deal detection on them.                                                                   |
-| `detect-deals`     | hourly at :37                 | Deal detection for listings priced in the last 26 h (safety net if a chained run was missed).                                                                                                                        |
-| `expire-deals`     | hourly at :47                 | Re-check every active deal: expire it if the product was delisted, its `expiresAt` passed, its price hasn't been re-checked for 48 h, it no longer passes the deal engine, or its variant stopped being the default. |
+| Job                | Schedule (GitHub Actions, UTC) | What it does                                                                                                                                                                                                         |
+| ------------------ | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `import-catalogue` | daily 04:17                    | Per active retailer: import (or resume) the catalogue. After a **complete** pass, mark listings not seen for 3 days inactive. Then run deal detection on everything just priced.                                     |
+| `refresh-prices`   | every 3 h at :07               | Per active retailer with price lookup: re-price listings with active deals first, then the least recently priced. Then run deal detection on them.                                                                   |
+| `detect-deals`     | hourly at :37                  | Deal detection for listings priced in the last 26 h (safety net if a chained run was missed).                                                                                                                        |
+| `expire-deals`     | hourly at :47                  | Re-check every active deal: expire it if the product was delisted, its `expiresAt` passed, its price hasn't been re-checked for 48 h, it no longer passes the deal engine, or its variant stopped being the default. |
+| `post-social`      | hourly at :27                  | Catch-up for posting to X (detection passes already post right after notifying alerts): automatic posts with the X keys, otherwise "tap to tweet" pushes to editors when push is set up.                             |
+| `process-alerts`   | hourly at :52                  | Notify alerts matching deals published in the last 26 h (each alert/deal pair once). Publishing in the admin also matches that deal immediately; this is the catch-up.                                               |
 
 Because detection is chained after imports and refreshes, the pipeline still works on a
 hosting plan that only allows daily cron jobs — deals would just be detected and expired
@@ -1198,7 +1366,9 @@ real integration is only called "working" after a documented manual/sandbox test
   and `/go` fully dynamic.
 - **Secrets:** Vercel environment variables per environment; `.env.example`
   documents names only; `env.ts` fails fast on missing/invalid values.
-- **Cron:** `vercel.json` cron entries (production only).
+- **Cron:** GitHub Actions schedule (`scheduled-jobs.yml`) calling the production site.
+- **Database changes:** `npm run vercel-build` (`scripts/vercel-build.mjs`) applies migrations
+  and the reference-data seed on production deploys only, then builds.
 - **Monitoring (later):** Vercel logs + error tracking (e.g. Sentry), uptime check on
   `/api/health`, alert on failed `ImportRun`s.
 - **Backups:** provider PITR enabled on production DB.
@@ -1209,25 +1379,27 @@ real integration is only called "working" after a documented manual/sandbox test
 
 Each stage ends with passing tests and a summary; no stage starts without instruction.
 
-| #   | Stage                  | Key output                                                                                                                              |
-| --- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Architecture           | PRODUCT.md, this document ✅                                                                                                            |
-| 2   | Project scaffold       | Next.js + TS strict + Tailwind + ESLint/Prettier + Vitest + Playwright + CI + `env.ts`; empty route shells; module-boundary lint rules  |
-| 3   | Database               | Prisma schema, first migration, Docker Postgres, minimal seed (categories, one mock retailer row), repository layer + integration tests |
-| 4   | Pricing engine         | Pure `computePriceStats` + money utils, exhaustive unit tests                                                                           |
-| 5   | Deal engine            | Pure rules/scoring/config + workflow state machine, unit tests                                                                          |
-| 6   | Retailer adapters      | Interface, Zod schemas, registry, contract test kit, `MockRetailerAdapter`, ingestion service                                           |
-| 7   | Background jobs        | Cron route handlers, job runner, locks, `ImportRun`, deal detection + expiry jobs                                                       |
-| 8   | Auth & roles           | Better Auth, roles, guards, proxy, security headers, rate-limiter interface                                                             |
-| 9   | Admin dashboard        | Overview, deal review workflow, products + price-history inspector, retailers, categories, users, audit log                             |
-| 10  | Public website         | Home, deals list, deal page (with chart), category & retailer pages, design system, affiliate disclosure                                |
-| 11  | Affiliate & clicks     | `AffiliateLink`, `/go/[code]`, click recording, admin clicks view                                                                       |
-| 12  | Search                 | Postgres FTS + trigram, filters, sorting, pagination                                                                                    |
-| 13  | Alerts & notifications | Alert CRUD, matching job, `Notifier` + email provider, unsubscribe                                                                      |
-| 14  | SEO                    | Metadata, canonical, sitemap, robots, OpenGraph, breadcrumbs, JSON-LD                                                                   |
-| 15  | Hardening              | Analytics rollups, rate limiting live, a11y/perf budgets, security review                                                               |
-| 16  | First real retailer    | One legitimate affiliate feed/API adapter, tested against sandbox/real credentials supplied by you                                      |
-| 17  | Automation & AI assist | Auto-approve rules; AI for categorisation, matching, titles/descriptions/tags (never prices)                                            |
+| #   | Stage                  | Key output                                                                                                                                         |
+| --- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Architecture           | PRODUCT.md, this document ✅                                                                                                                       |
+| 2   | Project scaffold       | Next.js + TS strict + Tailwind + ESLint/Prettier + Vitest + Playwright + CI + `env.ts`; empty route shells; module-boundary lint rules             |
+| 3   | Database               | Prisma schema, first migration, Docker Postgres, minimal seed (categories, one mock retailer row), repository layer + integration tests            |
+| 4   | Pricing engine         | Pure `computePriceStats` + money utils, exhaustive unit tests                                                                                      |
+| 5   | Deal engine            | Pure rules/scoring/config + workflow state machine, unit tests                                                                                     |
+| 6   | Retailer adapters      | Interface, Zod schemas, registry, contract test kit, `MockRetailerAdapter`, ingestion service                                                      |
+| 7   | Background jobs        | Cron route handlers, job runner, locks, `ImportRun`, deal detection + expiry jobs                                                                  |
+| 8   | Auth & roles           | Better Auth, roles, guards, proxy, security headers, rate-limiter interface                                                                        |
+| 9   | Admin dashboard        | Overview, deal review workflow, products + price-history inspector, retailers, categories, users, audit log                                        |
+| 10  | Public website         | Home, deals list, deal page (with chart), category & retailer pages, design system, affiliate disclosure                                           |
+| 11  | Affiliate & clicks     | `AffiliateLink`, `/go/[code]`, click recording, admin clicks view                                                                                  |
+| 12  | Search                 | Postgres FTS + trigram, filters, sorting, pagination                                                                                               |
+| 13  | Alerts & notifications | Alert CRUD, matching job, in-app notifications (email + unsubscribe wait for a provider — see §14.7)                                               |
+| 14  | Amazon & price drops   | Amazon UK (Creators API) adapter + tracking admin, deal levels, auto-publish, level alerts, browser push (live Amazon test needs your credentials) |
+| 15a | Post deals to X        | Auto-post big drops and price errors to the brand's X account, daily cap, admin "Post to X now"                                                    |
+| 15  | SEO                    | Metadata, canonical, sitemap, robots, OpenGraph, breadcrumbs, JSON-LD                                                                              |
+| 16  | Hardening              | Analytics rollups, rate limiting live, a11y/perf budgets, security review, dependency upgrades                                                     |
+| 17  | Go live with Amazon    | First run against the real Creators API with your credentials; fix any field mapping differences                                                   |
+| 18  | Automation & AI assist | Further auto-approve rules; AI for categorisation, matching, titles/descriptions/tags (never prices)                                               |
 
 ---
 
@@ -1252,8 +1424,8 @@ Each stage ends with passing tests and a summary; no stage starts without instru
    mitigated by chunking/cursors, with Inngest/QStash as the upgrade path.
 6. **Auth provider — resolved in Stage 8:** Better Auth (see §9). Originally: proposed Auth.js (no vendor lock-in, data in our DB). Clerk
    would be faster to ship but adds cost/vendor dependency. Needs your preference.
-7. **Email provider** for alerts (Resend, Postmark, SES…) — not chosen; hidden
-   behind a `Notifier` interface.
+7. **Email provider** for alerts (Resend, Postmark, SES…) — not chosen. Alerts notify
+   in-app until one is; see §5, Alerts, for what email adds.
 8. **Hosting DB provider & region** — Neon (recommended) vs Supabase vs Vercel
    Postgres; pick a London/EU region for latency and data residency.
 9. **Price-history volume** — mitigated by write-on-change; partition later.

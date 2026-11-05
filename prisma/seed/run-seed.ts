@@ -1,5 +1,5 @@
 import type { PrismaClient } from "../../src/generated/prisma/client";
-import { categories, mockRetailer, type CategorySeed } from "./reference-data";
+import { amazonRetailer, categories, mockRetailer, type CategorySeed } from "./reference-data";
 
 export type SeedOptions = { includeDevelopmentData: boolean };
 
@@ -25,11 +25,23 @@ async function upsertCategories(
 export async function runSeed(prisma: PrismaClient, options: SeedOptions) {
   const categoryCount = await upsertCategories(prisma, categories, null);
 
-  let retailerCount = 0;
+  const { slug: amazonSlug, ...amazonFields } = amazonRetailer;
+  await prisma.retailer.upsert({
+    where: { slug: amazonSlug },
+    create: {
+      slug: amazonSlug,
+      ...amazonFields,
+      status: "PAUSED",
+      trustScore: 80,
+      adapterConfig: { marketplace: "www.amazon.co.uk", asins: [], searches: [] },
+    },
+    update: amazonFields,
+  });
+  let retailerCount = 1;
   if (options.includeDevelopmentData) {
     const { slug, ...fields } = mockRetailer;
     await prisma.retailer.upsert({ where: { slug }, create: { slug, ...fields }, update: fields });
-    retailerCount = 1;
+    retailerCount += 1;
   }
 
   return { categoryCount, retailerCount };

@@ -13,6 +13,7 @@ import type { DbClient } from "@/server/db/types";
 import {
   DEFAULT_DEAL_ENGINE_CONFIG,
   evaluateDeal,
+  isHigherLevel,
   type DealEngineConfig,
   type DealEvaluation,
 } from "@/server/deals/engine";
@@ -51,7 +52,8 @@ function isUniqueViolation(error: unknown): boolean {
 
 /**
  * Keeps deals in step with prices. For each product it evaluates the default variant and
- * creates a PENDING_REVIEW deal, refreshes an active deal's numbers, or expires it. Every
+ * creates a PENDING_REVIEW deal (published at once for auto-publish retailers), refreshes an
+ * active deal's numbers, or expires it. Every
  * change is written to the audit log with a null actor (system).
  */
 export function createDealDetectionService(
@@ -185,6 +187,7 @@ export function createDealDetectionService(
         score: candidate.score,
         scoreBreakdown: candidate.scoreBreakdown,
         engineVersion: candidate.engineVersion,
+        level: candidate.level,
       };
       const summary = candidate.reasons[0] ?? null;
 
@@ -192,7 +195,9 @@ export function createDealDetectionService(
         // The snapshot records the numbers at detection. Averages drift as time passes, so it
         // is only rewritten when the deal price itself changes — not on every re-evaluation.
         if (active.dealPrice === snapshot.dealPrice) return "unchanged";
-        await deals.updateSnapshot(active.id, snapshot, summary);
+        // A deeper drop that raises the level (e.g. to a possible price error) is news again.
+        const raised = isHigherLevel(snapshot.level, active.level) ? now : undefined;
+        await deals.updateSnapshot(active.id, snapshot, summary, raised);
         await audit.record({
           actorId: null,
           action: "deal.update",
@@ -203,11 +208,13 @@ export function createDealDetectionService(
               dealPrice: active.dealPrice,
               referencePrice: active.referencePrice,
               score: active.score,
+              level: active.level,
             },
             to: {
               dealPrice: snapshot.dealPrice,
               referencePrice: snapshot.referencePrice,
               score: snapshot.score,
+              level: snapshot.level,
             },
           },
           createdAt: now,
@@ -235,9 +242,26 @@ export function createDealDetectionService(
         action: "deal.detect",
         entityType: "Deal",
         entityId: created.id,
-        diff: { score: snapshot.score, reasons: candidate.reasons },
+        diff: { score: snapshot.score, level: snapshot.level, reasons: candidate.reasons },
         createdAt: now,
       });
+
+      if (product.retailer.autoPublish) {
+        const step = transition(created.status, "auto-publish", "system");
+        if (
+          step.ok &&
+          (await deals.transition(created.id, created.status, step.to, { publishedAt: now }))
+        ) {
+          await audit.record({
+            actorId: null,
+            action: "deal.auto-publish",
+            entityType: "Deal",
+            entityId: created.id,
+            diff: { from: created.status, to: step.to, reason: "Retailer is set to auto-publish" },
+            createdAt: now,
+          });
+        }
+      }
       return "created";
     });
   }

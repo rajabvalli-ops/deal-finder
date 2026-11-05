@@ -18,6 +18,20 @@ test("an editor reviews, approves and publishes a detected deal", async ({ page 
   await expect(page.getByRole("status")).toHaveText("Deal published.");
   await expect(page.getByText("Published", { exact: true })).toBeVisible();
   await expect(page.getByText(/deal\.publish by/)).toBeVisible();
+  // E2E runs without X keys: posting is manual, through X's compose screen.
+  await expect(page.getByRole("heading", { name: "X posts" })).toBeVisible();
+  const tweet = page.getByRole("link", { name: "Tweet this (opens X)" });
+  await expect(tweet).toHaveAttribute("href", `/admin/deals/${fixture.dealId}/tweet`);
+  const response = await page.request.get(`/admin/deals/${fixture.dealId}/tweet`, {
+    maxRedirects: 0,
+  });
+  expect(response.status()).toBe(303);
+  const intent = new URL(response.headers().location!);
+  expect(intent.origin + intent.pathname).toBe("https://x.com/intent/post");
+  const text = intent.searchParams.get("text")!;
+  expect(text).toContain(`£39.99 for ${fixture.title}`);
+  expect(text).toContain(`/deals/${fixture.slug}`);
+  expect(text.endsWith("#ad")).toBe(true);
 });
 
 test("an editor rejects a deal with a reason and edits another", async ({ page }) => {

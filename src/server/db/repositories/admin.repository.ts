@@ -89,6 +89,13 @@ export function createAdminRepository(client: DbClient) {
       });
     },
 
+    findRetailer(id: string) {
+      return client.retailer.findUnique({
+        where: { id },
+        include: { _count: { select: { products: true, deals: true } } },
+      });
+    },
+
     listRetailers() {
       return client.retailer.findMany({
         orderBy: { name: "asc" },

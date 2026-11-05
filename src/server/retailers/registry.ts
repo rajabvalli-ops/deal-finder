@@ -1,9 +1,11 @@
+import { createAmazonAdapter } from "./adapters/amazon";
 import { createMockRetailerAdapter } from "./adapters/mock";
 import type { AdapterContext, AdapterFactory, RetailerAdapter } from "./types";
 
 // adapterKey (stored on the Retailer row) → factory. Adding a retailer integration means
 // adding one line here; nothing else in the application changes.
 const FACTORIES: Readonly<Record<string, AdapterFactory>> = {
+  amazon: createAmazonAdapter,
   mock: createMockRetailerAdapter,
 };
 

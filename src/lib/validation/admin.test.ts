@@ -70,6 +70,12 @@ describe("dealActionSchema", () => {
 });
 
 describe("other admin forms", () => {
+  it("reads the auto-publish checkbox", () => {
+    const base = { retailerId: "r", status: "ACTIVE", trustScore: "50" };
+    expect(retailerUpdateSchema.parse(base).autoPublish).toBe(false);
+    expect(retailerUpdateSchema.parse({ ...base, autoPublish: "on" }).autoPublish).toBe(true);
+  });
+
   it("coerces and bounds the trust score", () => {
     expect(
       retailerUpdateSchema.parse({ retailerId: "r", status: "PAUSED", trustScore: "70" })

@@ -12,6 +12,8 @@ const optionalText = (max: number) =>
 
 export const idSchema = z.string().trim().min(1).max(64);
 
+export const dealIdSchema = z.object({ dealId: idSchema });
+
 export const dealActionSchema = z.object({
   dealId: idSchema,
   action: z.enum(["approve", "reject", "publish", "expire", "remove"]),
@@ -46,6 +48,10 @@ export const retailerUpdateSchema = z.object({
   retailerId: idSchema,
   status: z.enum(["ACTIVE", "PAUSED", "DISABLED"]),
   trustScore: z.coerce.number().int().min(0).max(100),
+  autoPublish: z
+    .union([z.literal("on"), z.literal("")])
+    .optional()
+    .transform((v) => v === "on"),
 });
 
 export const categorySchema = z.object({

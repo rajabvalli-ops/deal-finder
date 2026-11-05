@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
+  <!-- Notification badge (Android status bar): white silhouette on transparent; only alpha is used. -->
+  <g transform="rotate(-20 48 48)">
+    <path d="M18 48 L36 26 H70 a5 5 0 0 1 5 5 V65 a5 5 0 0 1 -5 5 H36 Z" stroke="#ffffff" stroke-width="4" stroke-linejoin="round" fill="#ffffff"/>
+    
+  </g>
+</svg>

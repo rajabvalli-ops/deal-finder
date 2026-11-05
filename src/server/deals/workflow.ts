@@ -25,7 +25,8 @@ export const ACTIVE_DEAL_STATUSES: readonly DealStatus[] = [
   "PUBLISHED",
 ];
 
-export type DealAction = "submit" | "approve" | "reject" | "publish" | "expire" | "remove";
+export type DealAction =
+  "submit" | "approve" | "reject" | "publish" | "auto-publish" | "expire" | "remove";
 
 /** `system` = background jobs and the deal engine; `editor` = EDITOR or ADMIN users. */
 export type DealActor = "system" | "editor";
@@ -50,6 +51,12 @@ const TRANSITIONS: Readonly<Record<DealAction, Transition>> = {
     sets: "reviewedAt",
   },
   publish: { from: ["APPROVED"], to: "PUBLISHED", actors: ["editor"], sets: "publishedAt" },
+  "auto-publish": {
+    from: ["PENDING_REVIEW"],
+    to: "PUBLISHED",
+    actors: ["system"],
+    sets: "publishedAt",
+  },
   expire: {
     from: ["DETECTED", "PENDING_REVIEW", "APPROVED", "PUBLISHED"],
     to: "EXPIRED",
