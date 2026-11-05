@@ -145,6 +145,8 @@ export function createProductRepository(client: DbClient) {
           deals: { some: { status: { in: [...activeDealStatuses] } } },
         },
         select,
+        // Longest unchecked first, so every live deal is re-checked in turn.
+        orderBy: [{ priceUpdatedAt: { sort: "asc", nulls: "first" } }, { id: "asc" }],
         take: limit,
       });
       const rest = await client.product.findMany({

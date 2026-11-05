@@ -58,11 +58,26 @@ export type JobSettings = {
   alertWindowMs: number;
 };
 
+/** How often refresh-prices runs (keep in step with .github/workflows/scheduled-jobs.yml). */
+export const PRICE_REFRESH_INTERVAL_MINUTES = 10;
+
+/** Roughly how long until every one of `products` listings has had its price re-checked. */
+export function priceCycleMinutes(
+  products: number,
+  settings: JobSettings = DEFAULT_JOB_SETTINGS,
+): number {
+  return (
+    Math.max(1, Math.ceil(products / settings.pricesPerRetailerPerRun)) *
+    PRICE_REFRESH_INTERVAL_MINUTES
+  );
+}
+
 export const DEFAULT_JOB_SETTINGS: JobSettings = {
   cataloguePagesPerRun: 20,
   cataloguePageSize: 100,
   delistAfterMs: 3 * DAY_MS,
-  pricesPerRetailerPerRun: 200,
+  // At ~1 request per second and 10 products per request this fits a 60-second run.
+  pricesPerRetailerPerRun: 250,
   detectWindowMs: 26 * 3_600_000,
   alertWindowMs: 26 * 3_600_000,
 };

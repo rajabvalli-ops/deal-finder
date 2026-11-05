@@ -49,16 +49,16 @@ export function createAdminCatalogueService(client: DbClient) {
       retailerId: string;
       status: "ACTIVE" | "PAUSED" | "DISABLED";
       trustScore: number;
-      autoPublish: boolean;
+      autoPublishLevel: "NORMAL" | "BIG_DROP" | "PRICE_ERROR" | null;
       now: Date;
     }): Promise<AdminResult> {
-      const { actor, retailerId, status, trustScore, autoPublish, now } = params;
+      const { actor, retailerId, status, trustScore, autoPublishLevel, now } = params;
       if (!hasRole(actor.role, "ADMIN")) return Promise.resolve(fail("FORBIDDEN"));
       return inTransaction(client, async (tx) => {
         const retailers = createRetailerRepository(tx);
         const before = await retailers.findById(retailerId);
         if (!before) return fail("NOT_FOUND");
-        await retailers.update(retailerId, { status, trustScore, autoPublish });
+        await retailers.update(retailerId, { status, trustScore, autoPublishLevel });
         await createAuditLogRepository(tx).record({
           actorId: actor.id,
           action: "retailer.update",
@@ -67,7 +67,7 @@ export function createAdminCatalogueService(client: DbClient) {
           diff: {
             status: { from: before.status, to: status },
             trustScore: { from: before.trustScore, to: trustScore },
-            autoPublish: { from: before.autoPublish, to: autoPublish },
+            autoPublishLevel: { from: before.autoPublishLevel, to: autoPublishLevel },
           },
           createdAt: now,
         });

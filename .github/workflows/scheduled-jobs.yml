@@ -10,7 +10,7 @@ name: Scheduled jobs
 on:
   schedule:
     - cron: "17 4 * * *" # import-catalogue, daily
-    - cron: "7 */3 * * *" # refresh-prices, every 3 hours
+    - cron: "*/10 * * * *" # refresh-prices, every 10 minutes (price errors don't last)
     - cron: "37 * * * *" # detect-deals, hourly
     - cron: "47 * * * *" # expire-deals, hourly
     - cron: "52 * * * *" # process-alerts, hourly
@@ -49,7 +49,7 @@ jobs:
           fi
           case "$SCHEDULE" in
             "17 4 * * *") JOB=import-catalogue ;;
-            "7 */3 * * *") JOB=refresh-prices ;;
+            "*/10 * * * *") JOB=refresh-prices ;;
             "37 * * * *") JOB=detect-deals ;;
             "47 * * * *") JOB=expire-deals ;;
             "52 * * * *") JOB=process-alerts ;;

@@ -3,11 +3,18 @@ import { testDb } from "./setup";
 
 let sequence = 0;
 
-export async function createRetailer(overrides: { slug?: string; autoPublish?: boolean } = {}) {
+export async function createRetailer(
+  overrides: {
+    slug?: string;
+    /** true = auto-publish every deal. */
+    autoPublish?: boolean;
+    autoPublishLevel?: "NORMAL" | "BIG_DROP" | "PRICE_ERROR";
+  } = {},
+) {
   sequence += 1;
   return testDb.retailer.create({
     data: {
-      autoPublish: overrides.autoPublish ?? false,
+      autoPublishLevel: overrides.autoPublishLevel ?? (overrides.autoPublish ? "NORMAL" : null),
       slug: overrides.slug ?? `test-retailer-${sequence}`,
       name: `Test Retailer ${sequence}`,
       websiteUrl: "https://retailer.invalid",
@@ -47,7 +54,13 @@ export function listingInput(
 /** A product with 30 days at £100 then £80 now, run through deal detection → one PENDING_REVIEW deal. */
 export async function createPendingDeal(
   now = new Date(),
-  overrides: { title?: string; externalId?: string; dropTo?: number; autoPublish?: boolean } = {},
+  overrides: {
+    title?: string;
+    externalId?: string;
+    dropTo?: number;
+    autoPublish?: boolean;
+    autoPublishLevel?: "NORMAL" | "BIG_DROP" | "PRICE_ERROR";
+  } = {},
 ) {
   const { createProductRepository } = await import("@/server/db/repositories/product.repository");
   const { createPriceHistoryRepository } =
@@ -55,7 +68,10 @@ export async function createPendingDeal(
   const { createDealDetectionService } =
     await import("@/server/services/deals/deal-detection.service");
   const DAY = 86_400_000;
-  const retailer = await createRetailer({ autoPublish: overrides.autoPublish });
+  const retailer = await createRetailer({
+    autoPublish: overrides.autoPublish,
+    autoPublishLevel: overrides.autoPublishLevel,
+  });
   const dropTo = overrides.dropTo ?? 8000;
   const externalId = overrides.externalId ?? "SKU-1";
   const product = await createProductRepository(testDb).upsertListing(

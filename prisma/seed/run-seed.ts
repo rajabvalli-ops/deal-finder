@@ -33,6 +33,8 @@ export async function runSeed(prisma: PrismaClient, options: SeedOptions) {
       ...amazonFields,
       status: "PAUSED",
       trustScore: 80,
+      // Speed matters for price errors and big drops; ordinary deals still wait for review.
+      autoPublishLevel: "BIG_DROP",
       adapterConfig: { marketplace: "www.amazon.co.uk", asins: [], searches: [] },
     },
     update: amazonFields,

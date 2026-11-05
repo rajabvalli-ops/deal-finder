@@ -60,6 +60,32 @@ Everything here can be done in a phone browser — no terminal needed. Hosting i
    (prices every 3 hours, deal checks hourly, catalogue daily). GitHub may start scheduled
    runs a few minutes late.
 
+## 4b. Faster price checks (recommended for price errors)
+
+Price errors often last minutes. GitHub runs scheduled jobs on a best-effort basis — at busy
+times a "every 10 minutes" job can start late or be skipped. For the price checks, use a free
+dedicated scheduler as well:
+
+1. Sign up at **cron-job.org** (free).
+2. **Create cronjob**:
+   - URL: `https://YOUR-SITE/api/cron/refresh-prices`
+   - Schedule: every **10 minutes**
+   - Advanced → Headers: add `Authorization` with the value `Bearer YOUR-CRON_SECRET`
+     (the word Bearer, a space, then the same CRON_SECRET as in Vercel)
+   - Request timeout: the maximum allowed.
+3. Save, then "Test run": the response should be a short JSON report with `"status":"completed"`.
+
+Runs that overlap are skipped safely (each job has a lock), so GitHub and cron-job.org can both
+call it. Each run checks up to 250 products (25 Amazon requests); the Amazon page in the admin
+shows how long a full round of your tracked products takes. Every 10 minutes is about 3,600
+Amazon requests a day. Amazon's starting allowance has been about one request a second and
+8,640 a day (it grows with your sales) — so don't go below 10 minutes until Associates Central
+shows a higher limit.
+
+Also set **Admin → Retailers → Amazon UK → "Auto-publish big drops & price errors"** (the
+default for a new install): otherwise each deal waits for you to approve it before anyone is
+alerted.
+
 ## 5. On your iPhone
 
 1. Open the site in **Safari → Share → Add to Home Screen**.

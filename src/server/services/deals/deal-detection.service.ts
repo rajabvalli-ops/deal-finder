@@ -52,7 +52,8 @@ function isUniqueViolation(error: unknown): boolean {
 
 /**
  * Keeps deals in step with prices. For each product it evaluates the default variant and
- * creates a PENDING_REVIEW deal (published at once for auto-publish retailers), refreshes an
+ * creates a PENDING_REVIEW deal (published at once when the retailer auto-publishes deals at its
+ * level), refreshes an
  * active deal's numbers, or expires it. Every
  * change is written to the audit log with a null actor (system).
  */
@@ -246,7 +247,8 @@ export function createDealDetectionService(
         createdAt: now,
       });
 
-      if (product.retailer.autoPublish) {
+      const autoLevel = product.retailer.autoPublishLevel;
+      if (autoLevel && !isHigherLevel(autoLevel, snapshot.level)) {
         const step = transition(created.status, "auto-publish", "system");
         if (
           step.ok &&
@@ -257,7 +259,11 @@ export function createDealDetectionService(
             action: "deal.auto-publish",
             entityType: "Deal",
             entityId: created.id,
-            diff: { from: created.status, to: step.to, reason: "Retailer is set to auto-publish" },
+            diff: {
+              from: created.status,
+              to: step.to,
+              reason: `Retailer auto-publishes ${autoLevel === "NORMAL" ? "every deal" : autoLevel === "BIG_DROP" ? "big drops and price errors" : "price errors"}`,
+            },
             createdAt: now,
           });
         }

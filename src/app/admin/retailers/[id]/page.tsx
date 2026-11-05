@@ -22,7 +22,7 @@ export default async function AmazonTrackingPage({
   const [{ id }, sp, user] = await Promise.all([params, searchParams, getCurrentUser()]);
   const tracking = await getAmazonTracking(id);
   if (!tracking) notFound();
-  const { retailer, config, missingEnv } = tracking;
+  const { retailer, config, missingEnv, priceCycleMinutes } = tracking;
   const canEdit = user !== null && hasRole(user.role, "ADMIN");
 
   return (
@@ -61,8 +61,14 @@ export default async function AmazonTrackingPage({
           </p>
         )}
         <p className="text-xs text-ink-muted">
-          {retailer._count.products} products tracked so far, {retailer._count.deals} deals. Deals
-          need 14 days of our own price history for a product before they can be detected.
+          {retailer._count.products} products tracked so far, {retailer._count.deals} deals. Each
+          product&apos;s price is re-checked about every{" "}
+          {priceCycleMinutes < 60
+            ? `${priceCycleMinutes} minutes`
+            : `${Math.round((priceCycleMinutes / 60) * 10) / 10} hours`}{" "}
+          — the more you track, the longer a full round takes, so track the products most likely to
+          drop. Deals need 14 days of our own price history for a product before they can be
+          detected.
         </p>
       </section>
 

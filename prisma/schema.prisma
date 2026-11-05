@@ -215,25 +215,27 @@ model RateLimit {
 // ───────────── Catalogue ─────────────
 
 model Retailer {
-  id              String          @id @default(cuid())
-  slug            String          @unique
-  name            String
-  websiteUrl      String
-  logoUrl         String?
-  description     String?
-  status          RetailerStatus  @default(ACTIVE)
+  id               String          @id @default(cuid())
+  slug             String          @unique
+  name             String
+  websiteUrl       String
+  logoUrl          String?
+  description      String?
+  status           RetailerStatus  @default(ACTIVE)
   /// Selects the RetailerAdapter implementation, e.g. "mock".
-  adapterKey      String
-  integrationType IntegrationType
+  adapterKey       String
+  integrationType  IntegrationType
   /// Non-secret adapter configuration only. Secrets live in environment variables.
-  adapterConfig   Json?
+  adapterConfig    Json?
   /// 0–100, set by admins; an input to the deal engine.
-  trustScore      Int             @default(50)
-  /// Publish engine-detected deals straight away instead of waiting for an editor.
-  autoPublish     Boolean         @default(false)
-  deliveryInfo    String?
-  createdAt       DateTime        @default(now()) @db.Timestamptz(3)
-  updatedAt       DateTime        @updatedAt @db.Timestamptz(3)
+  trustScore       Int             @default(50)
+  /// Publish engine-detected deals at this level or above straight away, without waiting
+  /// for an editor (NORMAL = every deal; BIG_DROP = big drops and price errors; PRICE_ERROR =
+  /// price errors only). Null = every deal waits for review.
+  autoPublishLevel DealLevel?
+  deliveryInfo     String?
+  createdAt        DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime        @updatedAt @db.Timestamptz(3)
 
   products       Product[]
   deals          Deal[]

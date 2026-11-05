@@ -70,10 +70,16 @@ describe("dealActionSchema", () => {
 });
 
 describe("other admin forms", () => {
-  it("reads the auto-publish checkbox", () => {
+  it("reads the auto-publish level", () => {
     const base = { retailerId: "r", status: "ACTIVE", trustScore: "50" };
-    expect(retailerUpdateSchema.parse(base).autoPublish).toBe(false);
-    expect(retailerUpdateSchema.parse({ ...base, autoPublish: "on" }).autoPublish).toBe(true);
+    const level = (autoPublishLevel?: string) =>
+      retailerUpdateSchema.parse({ ...base, autoPublishLevel }).autoPublishLevel;
+    expect(level()).toBeNull();
+    expect(level("")).toBeNull();
+    expect(level("normal")).toBe("NORMAL");
+    expect(level("big-drop")).toBe("BIG_DROP");
+    expect(level("price-error")).toBe("PRICE_ERROR");
+    expect(retailerUpdateSchema.safeParse({ ...base, autoPublishLevel: "on" }).success).toBe(false);
   });
 
   it("coerces and bounds the trust score", () => {

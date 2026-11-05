@@ -13,7 +13,11 @@ export function createRetailerRepository(client: DbClient) {
 
     update(
       id: string,
-      data: { status: RetailerStatus; trustScore: number; autoPublish: boolean },
+      data: {
+        status: RetailerStatus;
+        trustScore: number;
+        autoPublishLevel: "NORMAL" | "BIG_DROP" | "PRICE_ERROR" | null;
+      },
     ): Promise<Retailer> {
       return client.retailer.update({ where: { id }, data });
     },

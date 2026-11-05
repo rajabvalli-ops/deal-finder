@@ -67,6 +67,25 @@ describe("auto-publish", () => {
     ).toMatchObject({ actorId: null });
   });
 
+  it("can auto-publish only price errors (or big drops), leaving the rest for review", async () => {
+    const errors = { autoPublishLevel: "PRICE_ERROR" as const };
+    const big = { autoPublishLevel: "BIG_DROP" as const };
+    const status = async (dropTo: number, options: typeof errors | typeof big, id: string) =>
+      (await createPendingDeal(NOW, { externalId: id, dropTo, ...options })).deal.status;
+    expect(await status(2500, errors, "a")).toBe("PUBLISHED");
+    expect(await status(6000, errors, "b")).toBe("PENDING_REVIEW");
+    expect(await status(6000, big, "c")).toBe("PUBLISHED");
+    expect(await status(8000, big, "d")).toBe("PENDING_REVIEW");
+    expect(
+      await testDb.auditLog.findFirst({
+        where: { action: "deal.auto-publish" },
+        orderBy: { createdAt: "asc" },
+      }),
+    ).toMatchObject({
+      diff: expect.objectContaining({ reason: "Retailer auto-publishes price errors" }),
+    });
+  });
+
   it("leaves other retailers' deals for review", async () => {
     const { deal } = await createPendingDeal(NOW);
     expect(deal.status).toBe("PENDING_REVIEW");

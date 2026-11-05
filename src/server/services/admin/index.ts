@@ -3,6 +3,7 @@ import { db } from "@/server/db/client";
 import { createAdminRepository } from "@/server/db/repositories/admin.repository";
 import { createPriceHistoryRepository } from "@/server/db/repositories/price-history.repository";
 import { computePriceStats } from "@/server/pricing";
+import { priceCycleMinutes } from "@/server/jobs/jobs";
 import { AMAZON_ENV } from "@/server/retailers/adapters/amazon";
 import { createSocialPostRepository } from "@/server/db/repositories/social-post.repository";
 import { shareIntentForDeal, socialPostingFromEnv } from "@/server/social/social-posting.service";
@@ -60,7 +61,12 @@ export async function getAmazonTracking(retailerId: string) {
   const config = retailer ? amazonConfigOf(retailer) : null;
   if (!retailer || !config) return null;
   const missingEnv = Object.values(AMAZON_ENV).filter((key) => !process.env[key]?.trim());
-  return { retailer, config, missingEnv };
+  return {
+    retailer,
+    config,
+    missingEnv,
+    priceCycleMinutes: priceCycleMinutes(retailer._count.products),
+  };
 }
 
 /** An editor's "Post to X now" for a live deal. Counts against the daily posting limit. */

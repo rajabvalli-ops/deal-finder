@@ -4,7 +4,12 @@ import { GET } from "@/app/api/cron/[job]/route";
 import { createJobLockRepository } from "@/server/db/repositories/job-lock.repository";
 import { createProductRepository } from "@/server/db/repositories/product.repository";
 import { ACTIVE_DEAL_STATUSES } from "@/server/deals/workflow";
-import { DEFAULT_JOB_SETTINGS, runJob, type JobReport } from "@/server/jobs/jobs";
+import {
+  DEFAULT_JOB_SETTINGS,
+  priceCycleMinutes,
+  runJob,
+  type JobReport,
+} from "@/server/jobs/jobs";
 import { withJobLock } from "@/server/jobs/lock";
 import { testDb } from "./setup";
 
@@ -218,5 +223,14 @@ describe("cron route", () => {
     const response = await call("expire-deals", `Bearer ${secret}`);
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ job: "expire-deals", status: "completed" });
+  });
+});
+
+describe("price check speed", () => {
+  it("estimates how long a full round of price checks takes", () => {
+    expect(priceCycleMinutes(0)).toBe(10);
+    expect(priceCycleMinutes(250)).toBe(10);
+    expect(priceCycleMinutes(251)).toBe(20);
+    expect(priceCycleMinutes(1000)).toBe(40);
   });
 });

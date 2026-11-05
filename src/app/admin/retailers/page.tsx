@@ -80,16 +80,25 @@ export default async function AdminRetailersPage({ searchParams }: { searchParam
                         aria-label={`Trust score for ${r.name}`}
                         className="w-20 rounded-md border border-line bg-surface px-2 py-1"
                       />
-                      <label className="flex items-center gap-1">
-                        <input
-                          type="checkbox"
-                          name="autoPublish"
-                          value="on"
-                          defaultChecked={r.autoPublish}
-                          className="h-4 w-4"
-                        />
-                        Auto-publish
-                      </label>
+                      <select
+                        name="autoPublishLevel"
+                        defaultValue={
+                          r.autoPublishLevel === null
+                            ? ""
+                            : r.autoPublishLevel === "NORMAL"
+                              ? "normal"
+                              : r.autoPublishLevel === "BIG_DROP"
+                                ? "big-drop"
+                                : "price-error"
+                        }
+                        aria-label={`Auto-publish for ${r.name}`}
+                        className="rounded-md border border-line bg-surface px-2 py-1"
+                      >
+                        <option value="">Review every deal</option>
+                        <option value="price-error">Auto-publish price errors</option>
+                        <option value="big-drop">Auto-publish big drops &amp; price errors</option>
+                        <option value="normal">Auto-publish every deal</option>
+                      </select>
                       <button
                         type="submit"
                         className="rounded-md border border-line px-3 py-1 font-medium hover:border-brand-600"
@@ -100,7 +109,9 @@ export default async function AdminRetailersPage({ searchParams }: { searchParam
                   ) : (
                     <span className="flex items-center gap-2">
                       <StatusBadge status={r.status} /> trust {r.trustScore}
-                      {r.autoPublish ? " · auto-publish" : ""}
+                      {r.autoPublishLevel
+                        ? ` · auto-publish ${humanise(r.autoPublishLevel).toLowerCase()}+`
+                        : ""}
                     </span>
                   )}
                 </td>
@@ -111,8 +122,9 @@ export default async function AdminRetailersPage({ searchParams }: { searchParam
       </div>
       <p className="text-xs text-ink-muted">
         Paused or disabled retailers are skipped by imports, and their active deals expire at the
-        next check. Trust feeds the deal score. Auto-publish puts this retailer&apos;s new deals
-        live (and alerts out) as soon as they are detected, without an editor&apos;s review.
+        next check. Trust feeds the deal score. Auto-publish puts this retailer&apos;s new deals at
+        that level live — and alerts and posts out — the moment they&apos;re detected; the rest wait
+        for an editor. Price errors vanish within minutes, so auto-publishing them matters most.
       </p>
     </div>
   );
