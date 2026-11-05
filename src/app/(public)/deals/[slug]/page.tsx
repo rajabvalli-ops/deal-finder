@@ -12,11 +12,13 @@ import { formatDate, formatDateTime, humanise } from "@/lib/format";
 import { formatBps, formatPrice } from "@/lib/money";
 import { isAtHistoricalLow } from "@/lib/public-types";
 import { ReportProblem } from "@/components/public/report-problem";
+import { VoteButtons } from "@/components/public/vote-buttons";
 import { VoucherCard } from "@/components/public/voucher-card";
 import { REPORT_REASONS } from "@/lib/validation/vouchers";
 import { publicCatalogue } from "@/server/services/public";
 import { vouchers } from "@/server/services/vouchers";
 import { reportProblem } from "../../report-actions";
+import { dealVoteState, voteOnDeal } from "../../vote-actions";
 
 export const revalidate = 300;
 
@@ -80,7 +82,15 @@ export default async function DealPage({ params }: Props) {
               </Link>
             </p>
             <h1 className="text-2xl font-bold sm:text-3xl">{deal.title}</h1>
-            <LevelBadge level={deal.level} />
+            <div className="flex flex-wrap items-center gap-3">
+              <VoteButtons
+                slug={deal.slug}
+                initialScore={deal.voteScore}
+                vote={voteOnDeal}
+                state={dealVoteState}
+              />
+              <LevelBadge level={deal.level} />
+            </div>
           </div>
 
           {deal.level === "PRICE_ERROR" ? (

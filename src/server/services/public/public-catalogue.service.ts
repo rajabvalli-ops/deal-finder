@@ -36,6 +36,7 @@ export function toSummary(row: PublicDealRow): PublicDealSummary {
     discountBps: row.discountBps,
     historicalLow: row.historicalLow,
     level: row.level,
+    voteScore: row.voteScore,
     priceCheckedAt: row.product.priceUpdatedAt,
     publishedAt: row.publishedAt,
   };
@@ -66,8 +67,9 @@ export function createPublicCatalogueService(client: DbClient) {
 
     /** Everything the homepage shows, in one round of queries. */
     async homepage() {
-      const [featured, latest, recent, categories, retailers] = await Promise.all([
+      const [featured, hot, latest, recent, categories, retailers] = await Promise.all([
         repo.listDeals({ sort: "top", featuredOnly: true, skip: 0, take: 4 }),
+        repo.listDeals({ sort: "hot", skip: 0, take: 12 }),
         repo.listDeals({ sort: "newest", skip: 0, take: 8 }),
         repo.listDeals({ sort: "newest", skip: 0, take: 60 }),
         this.popularCategories(8),
@@ -75,6 +77,11 @@ export function createPublicCatalogueService(client: DbClient) {
       ]);
       return {
         featured: featured.items.map(toSummary),
+        /** Hot deals people have voted up; empty until someone votes. */
+        hot: hot.items
+          .map(toSummary)
+          .filter((d) => d.voteScore > 0)
+          .slice(0, 4),
         latest: latest.items.map(toSummary),
         nearLows: recent.items.map(toSummary).filter(isNearHistoricalLow).slice(0, 4),
         categories,

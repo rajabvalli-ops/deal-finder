@@ -95,6 +95,12 @@ export default async function HomePage() {
         </Section>
       ) : null}
 
+      {home.hot.length > 0 ? (
+        <Section title="🔥 Hot right now" href="/deals?sort=hot">
+          <DealGrid deals={home.hot} />
+        </Section>
+      ) : null}
+
       {home.latest.length > 0 ? (
         <Section title="Latest deals" href="/deals">
           <DealGrid deals={home.latest} />

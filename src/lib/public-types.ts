@@ -21,6 +21,8 @@ export type PublicDealSummary = {
   discountBps: number;
   historicalLow: number | null;
   level: DealLevel;
+  /** Hot (+1) minus cold (-1) votes. */
+  voteScore: number;
   /** When the listing's price was last checked. */
   priceCheckedAt: Date | null;
   publishedAt: Date | null;
@@ -64,11 +66,12 @@ export type SearchOptions = {
 };
 export type PublicRetailer = { slug: string; name: string; dealCount: number };
 
-export const DEAL_SORTS = ["newest", "discount", "saving", "top"] as const;
+export const DEAL_SORTS = ["newest", "hot", "discount", "saving", "top"] as const;
 export type DealSort = (typeof DEAL_SORTS)[number];
 
 export const DEAL_SORT_LABELS: Record<DealSort, string> = {
   newest: "Newest",
+  hot: "🔥 Hot",
   discount: "Biggest discount",
   saving: "Biggest saving",
   top: "Top picks",

@@ -31,6 +31,7 @@ export type PublicDealRow = Prisma.DealGetPayload<{ include: typeof publicDealIn
 
 const ORDER: Record<string, Prisma.DealOrderByWithRelationInput[]> = {
   newest: [{ publishedAt: "desc" }, { id: "desc" }],
+  hot: [{ hotRank: { sort: "desc", nulls: "last" } }, { id: "desc" }],
   discount: [{ discountBps: "desc" }, { publishedAt: "desc" }],
   saving: [{ savingAmount: "desc" }, { publishedAt: "desc" }],
   top: [{ score: "desc" }, { publishedAt: "desc" }],

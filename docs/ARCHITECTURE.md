@@ -1054,6 +1054,26 @@ different `adapterConfig`.
   during its window; the in-app notification is still stored. A broadcast missed during quiet
   hours is not re-sent later.
 
+### Voting and the Hot tab (implemented in Stage 17b)
+
+- **Votes:** signed-in users vote a public deal 🔥 hot (+1) or 🧊 cold (−1), one vote per
+  person per deal (`DealVote`, primary key deal + user, `CHECK value IN (-1, 1)`); pressing
+  the same button again takes the vote back. `Deal.voteScore` is the sum, recomputed in the
+  same transaction after locking the deal row, so concurrent votes can't drift it. Voting is
+  rate-limited (60 per person per 10 minutes, per instance). Visitors who aren't signed in
+  get "Sign in to vote". The deal page loads the live score and the user's own vote through a
+  server action, so the cached page itself stays the same for everyone; deal cards show the
+  score as of their last render (within 5 minutes).
+- **Hot ranking:** `Deal.hotRank` is a Postgres generated column (never written by the app):
+  `sign(p)·log10(max(|p|, 1)) + (publishedAt − 2026-01-01) / 12.5 h`, where the points `p`
+  are the vote score plus 10 for a possible price error or 3 for a big drop. A deal 12.5
+  hours newer ties with one that has ten times the points, so the Hot tab favours what's new
+  and popular. Because the rank doesn't depend on the current time it is stored and indexed
+  (`status, hotRank`). `hotRank()` in `src/lib/hot.ts` mirrors the SQL and the integration
+  test checks they agree.
+- **Where:** a "🔥 Hot" sort on deal lists (`/deals?sort=hot`, categories, retailers) and a
+  "🔥 Hot right now" homepage section showing voted-up deals (hidden until someone votes).
+
 ### Search (implemented in Stage 12)
 
 `src/lib/validation/search.ts` (parsing), `src/server/db/repositories/search.repository.ts`
@@ -1443,6 +1463,7 @@ Each stage ends with passing tests and a summary; no stage starts without instru
 | 15a | Post deals to X        | Auto-post big drops and price errors to the brand's X account, daily cap, admin "Post to X now"                                                    |
 | 16  | Vouchers & reports     | Voucher codes (admin, `/vouchers`, on deal pages) and "report a problem" with auto-hide for vouchers                                               |
 | 17a | Alerts without account | Price error / big drop push alerts with no account, per-device quiet hours                                                                         |
+| 17b | Voting & Hot           | Hot / cold votes on deals, a Hot tab and homepage section                                                                                          |
 | 15  | SEO                    | Metadata, canonical, sitemap, robots, OpenGraph, breadcrumbs, JSON-LD                                                                              |
 | 16  | Hardening              | Analytics rollups, rate limiting live, a11y/perf budgets, security review, dependency upgrades                                                     |
 | 17  | Go live with Amazon    | First run against the real Creators API with your credentials; fix any field mapping differences                                                   |

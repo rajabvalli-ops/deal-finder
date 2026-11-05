@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { DEAL_LEVEL_LABELS } from "@/lib/alerts";
+import { formatVotes } from "@/lib/hot";
 import { formatBps, formatPrice } from "@/lib/money";
 import { isAtHistoricalLow, type PublicDealSummary } from "@/lib/public-types";
 import { ProductImage } from "./product-image";
@@ -37,6 +38,14 @@ export function DealCard({ deal }: { deal: PublicDealSummary }) {
           </Link>
         </h3>
         <div className="mt-auto">
+          {deal.voteScore !== 0 ? (
+            <p
+              className={`text-xs font-bold tabular-nums ${deal.voteScore > 0 ? "text-red-700" : "text-sky-700"}`}
+            >
+              {deal.voteScore > 0 ? "🔥" : "🧊"} {formatVotes(deal.voteScore)}
+              <span className="sr-only"> votes</span>
+            </p>
+          ) : null}
           <p className="text-lg font-bold tabular-nums sm:text-xl">{formatPrice(deal.dealPrice)}</p>
           <p className="text-sm text-ink-muted">Save {formatPrice(deal.savingAmount)}</p>
         </div>
