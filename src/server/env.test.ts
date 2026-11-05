@@ -91,3 +91,24 @@ describe("parseEnv", () => {
     expect(parseEnv({ ...prod, BETTER_AUTH_SECRET }).BETTER_AUTH_SECRET).toBe(BETTER_AUTH_SECRET);
   });
 });
+
+describe("site URL on Vercel", () => {
+  it("falls back to Vercel's production domain when NEXT_PUBLIC_SITE_URL isn't set", () => {
+    const env = parseEnv({
+      NODE_ENV: "production",
+      DATABASE_URL,
+      BETTER_AUTH_SECRET,
+      VERCEL_PROJECT_PRODUCTION_URL: "deal-broker.vercel.app",
+    });
+    expect(env.NEXT_PUBLIC_SITE_URL).toBe("https://deal-broker.vercel.app");
+    expect(
+      parseEnv({
+        NODE_ENV: "production",
+        DATABASE_URL,
+        BETTER_AUTH_SECRET,
+        NEXT_PUBLIC_SITE_URL: "https://dealbroker.co.uk",
+        VERCEL_PROJECT_PRODUCTION_URL: "deal-broker.vercel.app",
+      }).NEXT_PUBLIC_SITE_URL,
+    ).toBe("https://dealbroker.co.uk");
+  });
+});

@@ -1,5 +1,6 @@
 import "server-only";
 import { z } from "zod";
+import { siteUrlFromEnv } from "@/lib/site";
 
 const DEFAULT_SITE_URL = "http://localhost:3000";
 /** Only ever used outside production, where BETTER_AUTH_SECRET is mandatory. */
@@ -54,7 +55,11 @@ export type Env = z.infer<typeof envSchema>;
 
 /** Validates raw environment variables, throwing a readable error listing every problem. */
 export function parseEnv(raw: Record<string, string | undefined>): Env {
-  const result = envSchema.safeParse(raw);
+  // On Vercel the production domain is known without configuration.
+  const result = envSchema.safeParse({
+    ...raw,
+    NEXT_PUBLIC_SITE_URL: siteUrlFromEnv(raw) ?? undefined,
+  });
   if (!result.success) {
     throw new Error(`Invalid environment variables:\n${z.prettifyError(result.error)}`);
   }

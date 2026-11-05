@@ -57,5 +57,8 @@ describe("shareSettingsFromEnv", () => {
     expect(shareSettingsFromEnv({ X_POST_LINKS: "retailer" }).links).toBe("retailer");
     expect(shareSettingsFromEnv({ X_POST_LINKS: "Amazon" }).links).toBe("retailer");
     expect(shareSettingsFromEnv({ X_POST_LINKS: "elsewhere" }).links).toBe("deal-page");
+    expect(
+      shareSettingsFromEnv({ VERCEL_PROJECT_PRODUCTION_URL: "deal-broker.vercel.app" }).siteUrl,
+    ).toBe("https://deal-broker.vercel.app");
   });
 });

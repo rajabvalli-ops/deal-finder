@@ -1,4 +1,5 @@
 import type { DealLevel } from "@/lib/public-types";
+import { siteUrlFromEnv } from "@/lib/site";
 import type { XCredentials } from "./x-client";
 
 // Social posting settings, all from the environment. The share settings (what to post and how
@@ -58,7 +59,7 @@ export function shareSettingsFromEnv(env: Env): ShareSettings {
         : links === "retailer" || links === "amazon"
           ? "retailer"
           : "deal-page",
-    siteUrl: (value("NEXT_PUBLIC_SITE_URL") ?? "http://localhost:3000").replace(/\/+$/, ""),
+    siteUrl: siteUrlFromEnv(env) ?? "http://localhost:3000",
   };
 }
 

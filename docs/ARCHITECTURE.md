@@ -58,7 +58,7 @@ later if ever needed.
                            │ PostgreSQL   │  │ Retailer APIs /  │  │ Email provider│
                            │ (Neon etc.)  │  │ affiliate feeds  │  │ (TBD)         │
                            └──────────────┘  └──────────────────┘  └───────────────┘
-      Vercel Cron ──► /api/cron/*  (import · price refresh · detect · expire · alerts)
+  GitHub Actions ──► /api/cron/*  (import · price refresh · detect · expire · alerts · X)
       Redis (Upstash, optional) ──► rate limiting, locks, cache
 ```
 
@@ -1162,11 +1162,14 @@ lists match. Only PUBLISHED deals appear on the public site.
 ## 8. Background-job architecture
 
 **Implemented in Stage 7** (`src/server/jobs/`, `src/server/services/deals/`,
-`src/app/api/cron/[job]/route.ts`, `vercel.json`). `process-alerts` was added in Stage 13.
+`src/app/api/cron/[job]/route.ts`, `.github/workflows/scheduled-jobs.yml`). `process-alerts`
+was added in Stage 13, `post-social` in Stage 15. The schedules moved from `vercel.json` to
+GitHub Actions because Vercel's free plan only allows daily cron jobs.
 
 ### Mechanism
 
-- **Trigger:** Vercel Cron calls `GET /api/cron/<job>` with `Authorization: Bearer $CRON_SECRET`.
+- **Trigger:** a scheduled GitHub Actions workflow calls `GET /api/cron/<job>` on the live site
+  with `Authorization: Bearer $CRON_SECRET` (repository secrets `SITE_URL`, `CRON_SECRET`).
   The token is compared in constant time (both sides SHA-256 hashed). No secret configured →
   `503`; wrong or missing token → `401` (before revealing whether the job exists); unknown
   job → `404`. Responses are `no-store`; `maxDuration` is 60s.
@@ -1186,14 +1189,14 @@ WHERE lockedUntil <= now`), atomic across instances and safe behind connection p
 
 ### Jobs
 
-| Job                | Schedule (`vercel.json`, UTC) | What it does                                                                                                                                                                                                         |
-| ------------------ | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `import-catalogue` | daily 04:17                   | Per active retailer: import (or resume) the catalogue. After a **complete** pass, mark listings not seen for 3 days inactive. Then run deal detection on everything just priced.                                     |
-| `refresh-prices`   | every 3 h at :07              | Per active retailer with price lookup: re-price listings with active deals first, then the least recently priced. Then run deal detection on them.                                                                   |
-| `detect-deals`     | hourly at :37                 | Deal detection for listings priced in the last 26 h (safety net if a chained run was missed).                                                                                                                        |
-| `expire-deals`     | hourly at :47                 | Re-check every active deal: expire it if the product was delisted, its `expiresAt` passed, its price hasn't been re-checked for 48 h, it no longer passes the deal engine, or its variant stopped being the default. |
-| `post-social`      | hourly at :27                 | Catch-up for posting to X (detection passes already post right after notifying alerts): automatic posts with the X keys, otherwise "tap to tweet" pushes to editors when push is set up.                             |
-| `process-alerts`   | hourly at :52                 | Notify alerts matching deals published in the last 26 h (each alert/deal pair once). Publishing in the admin also matches that deal immediately; this is the catch-up.                                               |
+| Job                | Schedule (GitHub Actions, UTC) | What it does                                                                                                                                                                                                         |
+| ------------------ | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `import-catalogue` | daily 04:17                    | Per active retailer: import (or resume) the catalogue. After a **complete** pass, mark listings not seen for 3 days inactive. Then run deal detection on everything just priced.                                     |
+| `refresh-prices`   | every 3 h at :07               | Per active retailer with price lookup: re-price listings with active deals first, then the least recently priced. Then run deal detection on them.                                                                   |
+| `detect-deals`     | hourly at :37                  | Deal detection for listings priced in the last 26 h (safety net if a chained run was missed).                                                                                                                        |
+| `expire-deals`     | hourly at :47                  | Re-check every active deal: expire it if the product was delisted, its `expiresAt` passed, its price hasn't been re-checked for 48 h, it no longer passes the deal engine, or its variant stopped being the default. |
+| `post-social`      | hourly at :27                  | Catch-up for posting to X (detection passes already post right after notifying alerts): automatic posts with the X keys, otherwise "tap to tweet" pushes to editors when push is set up.                             |
+| `process-alerts`   | hourly at :52                  | Notify alerts matching deals published in the last 26 h (each alert/deal pair once). Publishing in the admin also matches that deal immediately; this is the catch-up.                                               |
 
 Because detection is chained after imports and refreshes, the pipeline still works on a
 hosting plan that only allows daily cron jobs — deals would just be detected and expired
@@ -1363,7 +1366,9 @@ real integration is only called "working" after a documented manual/sandbox test
   and `/go` fully dynamic.
 - **Secrets:** Vercel environment variables per environment; `.env.example`
   documents names only; `env.ts` fails fast on missing/invalid values.
-- **Cron:** `vercel.json` cron entries (production only).
+- **Cron:** GitHub Actions schedule (`scheduled-jobs.yml`) calling the production site.
+- **Database changes:** `npm run vercel-build` (`scripts/vercel-build.mjs`) applies migrations
+  and the reference-data seed on production deploys only, then builds.
 - **Monitoring (later):** Vercel logs + error tracking (e.g. Sentry), uptime check on
   `/api/health`, alert on failed `ImportRun`s.
 - **Backups:** provider PITR enabled on production DB.

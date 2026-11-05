@@ -160,10 +160,12 @@ daily-rotating keyed hash. Details: `docs/ARCHITECTURE.md` §10.
 
 ## Background jobs
 
-Vercel Cron calls `GET /api/cron/<job>` with `Authorization: Bearer $CRON_SECRET` on the
-schedules in `vercel.json`. Check your hosting plan's cron limits before deploying — some
-plans only allow daily jobs (the pipeline still works, less promptly). Details:
-`docs/ARCHITECTURE.md` §8.
+GitHub Actions (`.github/workflows/scheduled-jobs.yml`) calls `GET /api/cron/<job>` with
+`Authorization: Bearer $CRON_SECRET` on the live site — hourly and every 3 hours, which
+Vercel's free plan doesn't allow for its own cron. It needs the repository secrets `SITE_URL`
+and `CRON_SECRET`; until both are set, runs skip. Run a job by hand from the repository's
+Actions tab ("Scheduled jobs" → "Run workflow"). Details: `docs/ARCHITECTURE.md` §8.
+Deployment steps: `docs/DEPLOY.md`.
 
 ## Module boundaries
 
