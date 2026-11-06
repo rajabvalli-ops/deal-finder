@@ -14,6 +14,7 @@ export const SOCIAL_ENV = {
   dailyLimit: "X_DAILY_POST_LIMIT",
   minLevel: "X_POST_MIN_LEVEL",
   links: "X_POST_LINKS",
+  delayMinutes: "X_POST_DELAY_MINUTES",
 } as const;
 
 /**
@@ -30,12 +31,19 @@ export type ShareSettings = {
   minLevel: DealLevel;
   links: LinkMode;
   siteUrl: string;
+  /**
+   * "App first": minutes a deal waits after becoming news before it goes to X (or to editors
+   * as "tap to tweet"), so people with notifications on hear first. 0 = straight away.
+   */
+  delayMinutes: number;
 };
 
 export type SocialConfig = ShareSettings & { credentials: XCredentials };
 
 const DEFAULT_DAILY_LIMIT = 10;
 const MAX_DAILY_LIMIT = 200;
+const DEFAULT_DELAY_MINUTES = 30;
+const MAX_DELAY_MINUTES = 1440;
 const LEVELS: readonly DealLevel[] = ["NORMAL", "BIG_DROP", "PRICE_ERROR"];
 
 type Env = Readonly<Record<string, string | undefined>>;
@@ -47,6 +55,7 @@ export function shareSettingsFromEnv(env: Env): ShareSettings {
   const limit = Number(value(SOCIAL_ENV.dailyLimit));
   const level = value(SOCIAL_ENV.minLevel)?.toUpperCase().replace(/-/g, "_");
   const links = value(SOCIAL_ENV.links)?.toLowerCase();
+  const delay = Number(value(SOCIAL_ENV.delayMinutes) ?? NaN);
   return {
     dailyLimit:
       Number.isInteger(limit) && limit >= 0 && limit <= MAX_DAILY_LIMIT
@@ -60,6 +69,10 @@ export function shareSettingsFromEnv(env: Env): ShareSettings {
           ? "retailer"
           : "deal-page",
     siteUrl: siteUrlFromEnv(env) ?? "http://localhost:3000",
+    delayMinutes:
+      Number.isInteger(delay) && delay >= 0 && delay <= MAX_DELAY_MINUTES
+        ? delay
+        : DEFAULT_DELAY_MINUTES,
   };
 }
 

@@ -4,11 +4,12 @@ import { notFound } from "next/navigation";
 import { AffiliateDisclosure } from "@/components/public/affiliate-disclosure";
 import { Breadcrumbs, type Crumb } from "@/components/public/breadcrumbs";
 import { DealComments } from "@/components/public/deal-comments";
-import { DealGrid, LevelBadge } from "@/components/public/deal-card";
+import { DealGrid, EarlyAccessBadge, LevelBadge } from "@/components/public/deal-card";
 import { OutboundButton } from "@/components/public/outbound-button";
 import { isFreebie, PriceBlock } from "@/components/public/price-block";
 import { ProductImage } from "@/components/public/product-image";
 import { PriceChart } from "@/components/ui/price-chart";
+import { TimeAgo } from "@/components/ui/time-ago";
 import { formatDate, formatDateTime, humanise } from "@/lib/format";
 import { formatBps, formatPrice } from "@/lib/money";
 import { isAtHistoricalLow } from "@/lib/public-types";
@@ -92,6 +93,7 @@ export default async function DealPage({ params }: Props) {
                 state={dealVoteState}
               />
               <LevelBadge level={deal.level} free={isFreebie(deal)} />
+              {deal.earlyAccess ? <EarlyAccessBadge /> : null}
             </div>
           </div>
 
@@ -122,8 +124,16 @@ export default async function DealPage({ params }: Props) {
           </ul>
 
           <p className="text-sm text-ink-muted">
-            Price checked {formatDateTime(deal.priceCheckedAt)}. Prices and stock can change quickly
-            — check the final price at {deal.retailer.name} before you buy.
+            Price checked{" "}
+            {deal.priceCheckedAt ? (
+              <span title={formatDateTime(deal.priceCheckedAt)}>
+                <TimeAgo date={deal.priceCheckedAt} />
+              </span>
+            ) : (
+              formatDateTime(deal.priceCheckedAt)
+            )}
+            . Prices and stock can change quickly — check the final price at {deal.retailer.name}{" "}
+            before you buy.
           </p>
 
           {deal.linkCode ? (

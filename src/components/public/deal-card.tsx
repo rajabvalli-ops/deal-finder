@@ -3,6 +3,8 @@ import { DEAL_LEVEL_LABELS } from "@/lib/alerts";
 import { formatVotes } from "@/lib/hot";
 import { formatBps, formatPrice } from "@/lib/money";
 import { isAtHistoricalLow, type PublicDealSummary } from "@/lib/public-types";
+import { TimeAgo } from "@/components/ui/time-ago";
+import { OutboundButton } from "./outbound-button";
 import { isFreebie, WithCode } from "./price-block";
 import { ProductImage } from "./product-image";
 
@@ -19,6 +21,7 @@ export function DealCard({ deal }: { deal: PublicDealSummary }) {
             −{formatBps(deal.discountBps)}
           </span>
           <LevelBadge level={deal.level} free={isFreebie(deal)} />
+          {deal.earlyAccess ? <EarlyAccessBadge /> : null}
         </span>
         {isAtHistoricalLow(deal) ? (
           <span className="absolute top-2 right-2 rounded-md bg-surface px-2 py-0.5 text-xs font-semibold text-ink shadow">
@@ -30,6 +33,11 @@ export function DealCard({ deal }: { deal: PublicDealSummary }) {
         <p className="truncate text-xs font-medium tracking-wide text-ink-muted uppercase">
           {deal.retailer.name}
         </p>
+        {deal.priceCheckedAt ? (
+          <p className="text-xs text-saving-600">
+            <TimeAgo date={deal.priceCheckedAt} prefix="✓ Checked " />
+          </p>
+        ) : null}
         <h3 className="text-sm leading-snug font-semibold sm:text-base">
           <Link
             href={`/deals/${deal.slug}`}
@@ -51,8 +59,32 @@ export function DealCard({ deal }: { deal: PublicDealSummary }) {
           <p className="text-sm text-ink-muted">Save {formatPrice(deal.savingAmount)}</p>
           <WithCode deal={deal} />
         </div>
+        {deal.linkCode ? (
+          <OutboundButton
+            code={deal.linkCode}
+            retailerName={deal.retailer.name}
+            placement="deal-card"
+            dealSlug={deal.slug}
+            size="sm"
+          />
+        ) : null}
+        <p className="text-xs text-ink-muted">
+          💬 {deal.commentCount} comment{deal.commentCount === 1 ? "" : "s"}
+        </p>
       </div>
     </article>
+  );
+}
+
+/** Not posted on X yet: only people on the site (and with notifications) know about it. */
+export function EarlyAccessBadge() {
+  return (
+    <span
+      className="rounded-md bg-frame-900 px-2 py-0.5 text-xs font-bold text-lime-400"
+      title="You're seeing this before it's posted on X"
+    >
+      ⚡ Early access
+    </span>
   );
 }
 

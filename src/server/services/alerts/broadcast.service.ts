@@ -35,6 +35,8 @@ export function createBroadcastService(
       minLevel: "BIG_DROP",
       dailyLimit: BROADCAST_DAILY_LIMIT,
       network: BROADCAST_NETWORK,
+      // App first: the people following on their devices hear straight away.
+      delayMinutes: 0,
     },
     {
       async post(_text, deal) {

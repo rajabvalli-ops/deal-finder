@@ -10,7 +10,16 @@ function href(basePath: string, sort: DealSort, page: number) {
 }
 
 /** Sort links (no JavaScript needed). */
-export function SortLinks({ basePath, current }: { basePath: string; current: DealSort }) {
+export function SortLinks({
+  basePath,
+  current,
+  forYou = false,
+}: {
+  basePath: string;
+  current: DealSort;
+  /** Also offer the personal "For you" list. */
+  forYou?: boolean;
+}) {
   return (
     <nav aria-label="Sort deals" className="flex flex-wrap gap-2 text-sm">
       {DEAL_SORTS.map((sort) => (
@@ -23,6 +32,14 @@ export function SortLinks({ basePath, current }: { basePath: string; current: De
           {DEAL_SORT_LABELS[sort]}
         </Link>
       ))}
+      {forYou ? (
+        <Link
+          href="/for-you"
+          className="rounded-full border border-line px-3 py-1 hover:border-brand-600"
+        >
+          ✨ For you
+        </Link>
+      ) : null}
     </nav>
   );
 }

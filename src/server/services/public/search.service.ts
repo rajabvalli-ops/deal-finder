@@ -5,7 +5,7 @@ import type { SearchFilters } from "@/lib/validation/search";
 import { createPublicRepository } from "@/server/db/repositories/public.repository";
 import { createSearchRepository } from "@/server/db/repositories/search.repository";
 import type { DbClient } from "@/server/db/types";
-import { toSummary } from "./public-catalogue.service";
+import { summarise } from "./public-catalogue.service";
 
 export const SEARCH_PAGE_SIZE = 24;
 
@@ -51,7 +51,7 @@ export function createSearchService(client: DbClient, options: { pageSize?: numb
         skip: request.skip,
         take: request.take,
       });
-      return { filters, results: toPage(items.map(toSummary), total, request) };
+      return { filters, results: toPage(await summarise(client, items), total, request) };
     },
 
     /** Choices for the category and retailer filters. */

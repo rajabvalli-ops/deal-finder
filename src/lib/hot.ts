@@ -21,7 +21,7 @@ export function hotRank(deal: { voteScore: number; level: DealLevel; publishedAt
   return Math.sign(points) * Math.log10(Math.max(Math.abs(points), 1)) + age / SECONDS_PER_DECADE;
 }
 
-/** "12°"-style temperature shown on deals: the vote score, with its sign. */
+/** The vote score as a temperature: "14°", "0°", "-3°". */
 export function formatVotes(voteScore: number): string {
-  return voteScore > 0 ? `+${voteScore}` : String(voteScore);
+  return `${voteScore}°`;
 }

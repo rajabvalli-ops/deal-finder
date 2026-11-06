@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { DealGrid } from "@/components/public/deal-card";
+import { LiveLine } from "@/components/public/live-line";
 import { SearchBox } from "@/components/public/search-form";
 import { site } from "@/lib/site";
 import { publicCatalogue } from "@/server/services/public";
@@ -50,6 +51,9 @@ export default async function HomePage() {
           below its own recent history — never a made-up &ldquo;was&rdquo; price. Turn on alerts and
           we&apos;ll ping you the moment a price drops or looks like a mistake.
         </p>
+        <div className="text-sm text-white/80">
+          <LiveLine count={home.live.count} lastCheckedAt={home.live.lastCheckedAt} />
+        </div>
         <div className="pt-1 text-ink">
           <SearchBox />
         </div>

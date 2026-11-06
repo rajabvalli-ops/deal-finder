@@ -28,6 +28,12 @@ export type PublicDealSummary = {
   /** When the listing's price was last checked. */
   priceCheckedAt: Date | null;
   publishedAt: Date | null;
+  /** Code for /go/[code]; null when the retailer link isn't available. Never the URL itself. */
+  linkCode: string | null;
+  /** Visible comments. */
+  commentCount: number;
+  /** Not on X yet: people with the site's notifications hear first ("app first"). */
+  earlyAccess: boolean;
 };
 
 export type PricePoint = { observedAt: Date; price: number };
@@ -35,8 +41,6 @@ export type PricePoint = { observedAt: Date; price: number };
 export type PublicDealDetail = PublicDealSummary & {
   /** For "report a problem" and vouchers; an opaque id, safe to show. */
   id: string;
-  /** Code for /go/[code]; null when the retailer link isn't available. Never the URL itself. */
-  linkCode: string | null;
   summary: string | null;
   description: string | null;
   expiresAt: Date | null;

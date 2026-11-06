@@ -16,7 +16,9 @@ import {
 } from "@/server/db/repositories/public.repository";
 import type { DbClient } from "@/server/db/types";
 import { bestPriceWithCode } from "@/lib/voucher-price";
+import { isEarlyAccess } from "@/lib/early-access";
 import { computePriceStats } from "@/server/pricing";
+import { shareSettingsFromEnv } from "@/server/social/config";
 
 const DAY_MS = 86_400_000;
 const CHART_DAYS = 180;
@@ -29,8 +31,14 @@ function liveCoupons(row: PublicDealRow, now: Date) {
   );
 }
 
-/** Cached pages render this, so "live" vouchers are as of the last render (minutes). */
-export function toSummary(row: PublicDealRow): PublicDealSummary {
+/**
+ * Cached pages render this, so "live" vouchers and early access are as of the last render
+ * (minutes). `linkCodes` maps product ids to their outbound link codes.
+ */
+export function toSummary(
+  row: PublicDealRow,
+  linkCodes: ReadonlyMap<string, string>,
+): PublicDealSummary {
   const now = new Date();
   const category = row.product.category;
   return {
@@ -51,7 +59,21 @@ export function toSummary(row: PublicDealRow): PublicDealSummary {
     voteScore: row.voteScore,
     priceCheckedAt: row.product.priceUpdatedAt,
     publishedAt: row.publishedAt,
+    linkCode: linkCodes.get(row.productId) ?? null,
+    commentCount: row._count.comments,
+    earlyAccess: isEarlyAccess(row, shareSettingsFromEnv(process.env), now),
   };
+}
+
+/** Summaries for a list of rows, with their outbound link codes in one query. */
+export async function summarise(
+  client: DbClient,
+  rows: PublicDealRow[],
+): Promise<PublicDealSummary[]> {
+  const codes = await createAffiliateRepository(client).activeProductLinkCodes([
+    ...new Set(rows.map((r) => r.productId)),
+  ]);
+  return rows.map((row) => toSummary(row, codes));
 }
 
 export function createPublicCatalogueService(client: DbClient) {
@@ -74,31 +96,62 @@ export function createPublicCatalogueService(client: DbClient) {
         skip: params.page.skip,
         take: params.page.take,
       });
-      return toPage(items.map(toSummary), total, params.page);
+      return toPage(await summarise(client, items), total, params.page);
     },
 
     /** Everything the homepage shows, in one round of queries. */
     async homepage() {
-      const [featured, hot, latest, recent, categories, retailers] = await Promise.all([
+      const [featured, hot, latest, recent, categories, retailers, live] = await Promise.all([
         repo.listDeals({ sort: "top", featuredOnly: true, skip: 0, take: 4 }),
         repo.listDeals({ sort: "hot", skip: 0, take: 12 }),
         repo.listDeals({ sort: "newest", skip: 0, take: 8 }),
         repo.listDeals({ sort: "newest", skip: 0, take: 60 }),
         this.popularCategories(8),
         this.popularRetailers(8),
+        this.liveStats(),
       ]);
+      const all = [...featured.items, ...hot.items, ...latest.items, ...recent.items];
+      const codes = await createAffiliateRepository(client).activeProductLinkCodes([
+        ...new Set(all.map((r) => r.productId)),
+      ]);
+      const summaries = (rows: PublicDealRow[]) => rows.map((row) => toSummary(row, codes));
       return {
-        featured: featured.items.map(toSummary),
+        featured: summaries(featured.items),
         /** Hot deals people have voted up; empty until someone votes. */
-        hot: hot.items
-          .map(toSummary)
+        hot: summaries(hot.items)
           .filter((d) => d.voteScore > 0)
           .slice(0, 4),
-        latest: latest.items.map(toSummary),
-        nearLows: recent.items.map(toSummary).filter(isNearHistoricalLow).slice(0, 4),
+        latest: summaries(latest.items),
+        nearLows: summaries(recent.items).filter(isNearHistoricalLow).slice(0, 4),
         categories,
         retailers,
+        live,
       };
+    },
+
+    /**
+     * "For you": hot deals in the categories and from the retailers the user has shown
+     * interest in. `personal` is false (and the list is just Hot) until there is any.
+     */
+    async forYou(
+      userId: string,
+      now: Date,
+      take = 24,
+    ): Promise<{ personal: boolean; deals: PublicDealSummary[] }> {
+      const interests = await repo.interests(userId, new Date(now.getTime() - 90 * DAY_MS));
+      const personal = interests.categoryIds.length > 0 || interests.retailerIds.length > 0;
+      const { items } = await repo.listDeals({
+        sort: "hot",
+        ...(personal ? { interests } : {}),
+        skip: 0,
+        take,
+      });
+      return { personal, deals: await summarise(client, items) };
+    },
+
+    /** How many deals are live, and when a live deal's price was last checked. */
+    liveStats(): Promise<{ count: number; lastCheckedAt: Date | null }> {
+      return repo.liveStats();
     },
 
     /** Categories ordered by live deal count; top-level categories if nothing is published yet. */
@@ -143,9 +196,8 @@ export function createPublicCatalogueService(client: DbClient) {
         (o) => o.availability !== "OUT_OF_STOCK" && o.availability !== "DISCONTINUED",
       );
       return {
-        ...toSummary(row),
+        ...toSummary(row, linkCodes),
         id: row.id,
-        linkCode: linkCodes.get(row.productId) ?? null,
         summary: row.summary,
         description: row.description,
         expiresAt: row.expiresAt,
@@ -181,7 +233,7 @@ export function createPublicCatalogueService(client: DbClient) {
         skip: 0,
         take: limit,
       });
-      return items.map(toSummary);
+      return summarise(client, items);
     },
 
     async categoryBySlug(slug: string) {

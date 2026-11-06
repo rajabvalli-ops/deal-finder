@@ -20,23 +20,23 @@ test("signed-in users vote deals hot or cold; visitors are asked to sign in", as
   await page.goto(`/deals/${fixture.slug}`);
   const hot = page.getByRole("button", { name: "Vote hot" });
   const cold = page.getByRole("button", { name: "Vote cold" });
-  await expect(page.getByLabel("Score 0")).toBeVisible();
+  await expect(page.getByLabel("Score 0°")).toBeVisible();
 
   await hot.click();
-  await expect(page.getByLabel("Score +1")).toBeVisible();
+  await expect(page.getByLabel("Score 1°")).toBeVisible();
   await expect(hot).toHaveAttribute("aria-pressed", "true");
 
   await cold.click();
-  await expect(page.getByLabel("Score -1")).toBeVisible();
+  await expect(page.getByLabel("Score -1°")).toBeVisible();
   await expect(cold).toHaveAttribute("aria-pressed", "true");
 
   await cold.click(); // take it back
-  await expect(page.getByLabel("Score 0")).toBeVisible();
+  await expect(page.getByLabel("Score 0°")).toBeVisible();
   await expect(cold).toHaveAttribute("aria-pressed", "false");
 
   await hot.click();
   await page.reload();
-  await expect(page.getByLabel("Score +1")).toBeVisible();
+  await expect(page.getByLabel("Score 1°")).toBeVisible();
   await expect(page.getByRole("button", { name: "Vote hot" })).toHaveAttribute(
     "aria-pressed",
     "true",

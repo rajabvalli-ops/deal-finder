@@ -56,7 +56,8 @@ notifications enabled on your phone while signed in as an editor or admin, you a
    `X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET`.
 3. Optional: `X_DAILY_POST_LIMIT` (default 10), `X_POST_MIN_LEVEL` (`big-drop` default, or
    `price-error`, or `normal` for every deal), `X_POST_LINKS` (`deal-page` default, `amazon`
-   to link straight to the retailer with your tag, or `none`).
+   to link straight to the retailer with your tag, or `none`), `X_POST_DELAY_MINUTES`
+   ("app first": how long a deal waits before it goes to X, default 30, `0` for straight away).
 4. Deals then post automatically; editors can also press "Post to X now" on a live deal.
    Add "As an Amazon Associate I earn from qualifying purchases" to the X bio, and mark the
    account as automated in X's settings.

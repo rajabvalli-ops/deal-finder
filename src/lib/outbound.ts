@@ -2,7 +2,7 @@
 // the server (see docs/ARCHITECTURE.md §10).
 
 /** Where on the site an outbound link was clicked. Anything else is recorded as null. */
-export const PLACEMENTS = ["deal-page"] as const;
+export const PLACEMENTS = ["deal-page", "deal-card"] as const;
 export type Placement = (typeof PLACEMENTS)[number];
 
 export function parsePlacement(value: string | null | undefined): Placement | null {

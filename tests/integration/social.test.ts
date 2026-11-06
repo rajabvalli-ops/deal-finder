@@ -17,7 +17,11 @@ const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 const since = new Date(NOW.getTime() - DAY);
 
+/** Posts go out straight away, as with X_POST_DELAY_MINUTES=0. */
+const NO_DELAY = { X_POST_DELAY_MINUTES: "0" };
+
 const KEYS = {
+  ...NO_DELAY,
   X_API_KEY: "k",
   X_API_SECRET: "s",
   X_ACCESS_TOKEN: "t",
@@ -31,6 +35,7 @@ const config = (overrides: Partial<ShareSettings> = {}): ShareSettings & { netwo
   minLevel: "BIG_DROP",
   links: "deal-page",
   siteUrl: "https://dealbroker.example",
+  delayMinutes: 0,
   ...overrides,
 });
 
@@ -182,6 +187,46 @@ describe("auto-posting to X", () => {
   });
 });
 
+describe("app first", () => {
+  it("holds X posts for the delay, but not an editor's Post now", async () => {
+    const glitch = await liveDeal("Glitch Kettle", 900);
+    const big = await liveDeal("Big Kettle", 6000);
+    const { poster, texts } = fakePoster();
+    const service = createSocialPostingService(testDb, config({ delayMinutes: 30 }), poster);
+
+    expect(await service.run({ now: NOW, since })).toMatchObject({ queued: 2, posted: 0 });
+    expect(await service.run({ now: new Date(NOW.getTime() + 29 * 60_000), since })).toMatchObject({
+      posted: 0,
+    });
+    expect(
+      await service.postDeal({ dealId: big.deal.id, level: "BIG_DROP", now: NOW }),
+    ).toMatchObject({ posted: 1 });
+    expect(texts).toHaveLength(1);
+    expect(await service.run({ now: new Date(NOW.getTime() + 30 * 60_000), since })).toMatchObject({
+      posted: 1,
+    });
+    expect(
+      await testDb.socialPost.findFirstOrThrow({ where: { dealId: glitch.deal.id } }),
+    ).toMatchObject({
+      status: "POSTED",
+    });
+  });
+
+  it("waits 30 minutes by default", async () => {
+    await liveDeal("Glitch Kettle", 900);
+    const fetchX = vi.fn(async () => Response.json({ data: { id: "1" } }, { status: 201 }));
+    vi.stubGlobal("fetch", fetchX);
+    const env = { ...KEYS, X_POST_DELAY_MINUTES: undefined };
+    expect(await runJob("post-social", { client: testDb, now: NOW, env })).toMatchObject({
+      social: { queued: 1, posted: 0 },
+    });
+    const later = new Date(NOW.getTime() + 31 * 60_000);
+    expect(await runJob("post-social", { client: testDb, now: later, env })).toMatchObject({
+      social: { posted: 1 },
+    });
+  });
+});
+
 describe("posting from jobs and the admin", () => {
   it("posts as part of deal detection when X is connected, and not at all otherwise", async () => {
     await liveDeal("Glitch Kettle", 900);
@@ -246,7 +291,7 @@ describe("tap to tweet", () => {
         return "delivered" as const;
       }),
     };
-    const service = createSharePushService(testDb, sender, {});
+    const service = createSharePushService(testDb, sender, NO_DELAY);
     expect(await service.run({ now: NOW, since })).toMatchObject({ queued: 1, posted: 1 });
     expect(sent).toEqual([
       {
@@ -268,7 +313,7 @@ describe("tap to tweet", () => {
     await liveDeal("Glitch Kettle", 900);
     const sender = { send: vi.fn(async () => "delivered" as const) };
     for (let i = 0; i < 3; i++) {
-      await createSharePushService(testDb, sender, {}).run({ now: NOW, since });
+      await createSharePushService(testDb, sender, NO_DELAY).run({ now: NOW, since });
     }
     expect(await testDb.socialPost.findFirstOrThrow()).toMatchObject({
       status: "FAILED",
@@ -282,7 +327,7 @@ describe("tap to tweet", () => {
     await liveDeal("Glitch Kettle", 900);
     const sender = { send: vi.fn(async () => "gone" as const) };
     expect(
-      await createSharePushService(testDb, sender, {}).postDeal({
+      await createSharePushService(testDb, sender, NO_DELAY).postDeal({
         dealId: (await testDb.deal.findFirstOrThrow()).id,
         level: "PRICE_ERROR",
         now: NOW,
@@ -295,7 +340,11 @@ describe("tap to tweet", () => {
     await liveDeal("Glitch Kettle", 900);
     expect(sharePushFromEnv(testDb, {})).toBeUndefined();
     expect(sharePushFromEnv(testDb, { ...VAPID, ...KEYS })).toBeUndefined();
-    const report = await runJob("post-social", { client: testDb, now: NOW, env: VAPID });
+    const report = await runJob("post-social", {
+      client: testDb,
+      now: NOW,
+      env: { ...VAPID, ...NO_DELAY },
+    });
     // No editor devices yet: queued and waiting for a retry.
     expect(report).toMatchObject({ share: { queued: 1, posted: 0 } });
     expect(report).not.toHaveProperty("social");

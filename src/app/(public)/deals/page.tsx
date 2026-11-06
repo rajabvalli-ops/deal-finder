@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Breadcrumbs } from "@/components/public/breadcrumbs";
+import { LiveLine } from "@/components/public/live-line";
 import { DealGrid } from "@/components/public/deal-card";
 import { PageLinks, SortLinks } from "@/components/public/sort-and-pages";
 import { pageRequest } from "@/lib/pagination";
@@ -20,19 +21,22 @@ export default async function DealsPage({
 }) {
   const sp = await searchParams;
   const sort = parseDealSort(typeof sp.sort === "string" ? sp.sort : undefined);
-  const deals = await publicCatalogue.listDeals({ sort, page: pageRequest(sp.page, PAGE_SIZE) });
+  const [deals, live] = await Promise.all([
+    publicCatalogue.listDeals({ sort, page: pageRequest(sp.page, PAGE_SIZE) }),
+    publicCatalogue.liveStats(),
+  ]);
 
   return (
     <div className="space-y-6">
       <Breadcrumbs items={[{ href: "/", label: "Home" }, { label: "Deals" }]} />
       <div className="space-y-2">
         <h1 className="text-3xl font-bold">Latest deals</h1>
+        <LiveLine count={live.count} lastCheckedAt={live.lastCheckedAt} />
         <p className="text-ink-muted">
-          {deals.total} live deal{deals.total === 1 ? "" : "s"}, each checked against the
-          product&apos;s own price history.
+          Each deal is checked against the product&apos;s own price history.
         </p>
       </div>
-      <SortLinks basePath="/deals" current={sort} />
+      <SortLinks basePath="/deals" current={sort} forYou />
       {deals.items.length > 0 ? (
         <DealGrid deals={deals.items} />
       ) : (

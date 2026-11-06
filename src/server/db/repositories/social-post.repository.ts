@@ -45,10 +45,20 @@ export function createSocialPostRepository(client: DbClient) {
     },
 
     /** Queues posts, ignoring (deal, level) pairs already queued or posted. Returns how many were new. */
-    async queue(network: string, posts: { dealId: string; level: DealLevel }[]): Promise<number> {
+    async queue(
+      network: string,
+      posts: { dealId: string; level: DealLevel }[],
+      at: Date,
+    ): Promise<number> {
       if (posts.length === 0) return 0;
       const { count } = await client.socialPost.createMany({
-        data: posts.map((p) => ({ network, dealId: p.dealId, level: p.level, text: "" })),
+        data: posts.map((p) => ({
+          network,
+          dealId: p.dealId,
+          level: p.level,
+          text: "",
+          createdAt: at,
+        })),
         skipDuplicates: true,
       });
       return count;
@@ -61,9 +71,17 @@ export function createSocialPostRepository(client: DbClient) {
     },
 
     /** Pending posts, most striking first (price errors before big drops), oldest first. */
-    listPending(network: string, take: number) {
+    /** Pending posts queued at or before `readyBy` (plus any for `alwaysDealId`). */
+    listPending(network: string, take: number, readyBy: Date, alwaysDealId?: string) {
       return client.socialPost.findMany({
-        where: { network, status: "PENDING" },
+        where: {
+          network,
+          status: "PENDING",
+          OR: [
+            { createdAt: { lte: readyBy } },
+            ...(alwaysDealId ? [{ dealId: alwaysDealId }] : []),
+          ],
+        },
         orderBy: [{ level: "desc" }, { createdAt: "asc" }],
         take,
         include: { deal: { select: dealForPost } },

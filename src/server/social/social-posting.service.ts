@@ -75,13 +75,17 @@ export function createSocialPostingService(
     (l) => l === settings.minLevel || isHigherLevel(l, settings.minLevel),
   );
 
-  async function send(now: Date): Promise<Omit<SocialSummary, "queued">> {
+  const delayMs = settings.delayMinutes * 60_000;
+
+  /** Sends what's due; an editor's own "Post now" (`dealId`) skips the app-first delay. */
+  async function send(now: Date, dealId?: string): Promise<Omit<SocialSummary, "queued">> {
     const used = await posts.countPostedSince(network, new Date(now.getTime() - DAY_MS));
     let remaining = Math.max(0, settings.dailyLimit - used);
     const summary = { posted: 0, skipped: 0, failed: 0 };
     if (remaining === 0) return { ...summary, remainingToday: 0 };
 
-    for (const post of await posts.listPending(network, remaining)) {
+    const readyBy = new Date(now.getTime() - delayMs);
+    for (const post of await posts.listPending(network, remaining, readyBy, dealId)) {
       const deal = post.deal;
       const text = deal && !isHigherLevel(post.level, deal.level) ? tweetFor(deal, settings) : null;
       if (!deal || !text) {
@@ -119,6 +123,7 @@ export function createSocialPostingService(
       const queued = await posts.queue(
         network,
         deals.map((d) => ({ dealId: d.id, level: d.level })),
+        params.now,
       );
       return { queued, ...(await send(params.now)) };
     },
@@ -129,8 +134,12 @@ export function createSocialPostingService(
       level: DealLevel;
       now: Date;
     }): Promise<SocialSummary> {
-      const queued = await posts.queue(network, [{ dealId: params.dealId, level: params.level }]);
-      return { queued, ...(await send(params.now)) };
+      const queued = await posts.queue(
+        network,
+        [{ dealId: params.dealId, level: params.level }],
+        params.now,
+      );
+      return { queued, ...(await send(params.now, params.dealId)) };
     },
   };
 }

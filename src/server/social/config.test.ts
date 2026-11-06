@@ -21,6 +21,7 @@ describe("socialConfigFromEnv", () => {
       minLevel: "BIG_DROP",
       links: "deal-page",
       siteUrl: "http://localhost:3000",
+      delayMinutes: 30,
     });
   });
 
@@ -53,7 +54,13 @@ describe("shareSettingsFromEnv", () => {
       minLevel: "BIG_DROP",
       links: "deal-page",
       siteUrl: "http://localhost:3000",
+      delayMinutes: 30,
     });
+    expect(shareSettingsFromEnv({ X_POST_DELAY_MINUTES: "0" }).delayMinutes).toBe(0);
+    expect(shareSettingsFromEnv({ X_POST_DELAY_MINUTES: "90" }).delayMinutes).toBe(90);
+    expect(shareSettingsFromEnv({ X_POST_DELAY_MINUTES: "-5" }).delayMinutes).toBe(30);
+    expect(shareSettingsFromEnv({ X_POST_DELAY_MINUTES: "2000" }).delayMinutes).toBe(30);
+    expect(shareSettingsFromEnv({ X_POST_DELAY_MINUTES: "soon" }).delayMinutes).toBe(30);
     expect(shareSettingsFromEnv({ X_POST_LINKS: "retailer" }).links).toBe("retailer");
     expect(shareSettingsFromEnv({ X_POST_LINKS: "Amazon" }).links).toBe("retailer");
     expect(shareSettingsFromEnv({ X_POST_LINKS: "elsewhere" }).links).toBe("deal-page");

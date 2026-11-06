@@ -97,7 +97,7 @@ export function DealComments({ slug, list, post, remove }: Props) {
   const signInHref = `/sign-in?next=${encodeURIComponent(`/deals/${slug}`)}`;
 
   return (
-    <section aria-labelledby="comments-heading" className="space-y-4">
+    <section id="comments" aria-labelledby="comments-heading" className="space-y-4">
       <h2 id="comments-heading" className="text-xl font-bold">
         Comments{data && data.total > 0 ? ` (${data.total})` : ""}
       </h2>

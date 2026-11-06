@@ -1119,6 +1119,26 @@ different `adapterConfig`.
   draw for its points; that isn't built here, because a UK prize draw has legal requirements
   (free entry route, terms, prize fulfilment) the owner has to decide on first.
 
+### App first, live stamps and For you (implemented in Stage 17f–h)
+
+- **App first:** a post-worthy deal waits `X_POST_DELAY_MINUTES` (default 30, 0–1440) after
+  it becomes news (published, or its level went up) before it goes to X or out as "tap to
+  tweet". The queue entry is stamped with the time it was queued and only sent once that is
+  older than the delay; detection runs every 10 minutes, so it goes out within about 10
+  minutes of the delay ending. An editor's "Post to X now" ignores the delay. Notifications
+  (alerts and "no account" broadcasts) are never delayed. While a deal is held it shows
+  "⚡ Early access" (`src/lib/early-access.ts`), so visitors see the benefit of being here.
+- **Live stamps:** the homepage hero and `/deals` show "N live · prices checked 39 seconds
+  ago" (the latest price check on any live deal); cards show "✓ Checked 3 minutes ago" for
+  their own price. Pages are cached, so the times tick on in the browser (`TimeAgo`).
+- **Cards** now carry a "Get deal" button (through `/go/[code]`, placement `deal-card`,
+  `rel="sponsored nofollow noopener"`), the comment count, and votes as a temperature
+  ("14°"). Link codes for a page of deals are fetched in one query.
+- **For you** (`/for-you`, linked from the deal list tabs): hot deals in the categories and
+  from the retailers a signed-in user has shown interest in — their alerts, and deals they
+  voted hot, commented on or clicked through to in the last 90 days. With nothing to go on it
+  shows Hot and suggests voting or setting an alert.
+
 ### Search (implemented in Stage 12)
 
 `src/lib/validation/search.ts` (parsing), `src/server/db/repositories/search.repository.ts`
@@ -1512,6 +1532,7 @@ Each stage ends with passing tests and a summary; no stage starts without instru
 | 17c | Codes & freebies       | Voucher discounts, "price with code" on deals, "checked X ago" stamps, Freebie badge                                                               |
 | 17d | Comments               | Comments on deals by signed-in users, first names only, editor moderation                                                                          |
 | 17e | Points                 | Daily check-in with streaks, points for votes and comments (no cash value, no prize draw)                                                          |
+| 17f | App first & polish     | X posts held 30 min with "Early access" badge, live "checked X ago" stamps, buy button on cards, For you                                           |
 | 15  | SEO                    | Metadata, canonical, sitemap, robots, OpenGraph, breadcrumbs, JSON-LD                                                                              |
 | 16  | Hardening              | Analytics rollups, rate limiting live, a11y/perf budgets, security review, dependency upgrades                                                     |
 | 17  | Go live with Amazon    | First run against the real Creators API with your credentials; fix any field mapping differences                                                   |

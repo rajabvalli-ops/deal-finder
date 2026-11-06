@@ -46,9 +46,9 @@ describe("hotRank", () => {
 });
 
 describe("formatVotes", () => {
-  it("shows the sign", () => {
-    expect(formatVotes(5)).toBe("+5");
-    expect(formatVotes(0)).toBe("0");
-    expect(formatVotes(-2)).toBe("-2");
+  it("shows the score as a temperature", () => {
+    expect(formatVotes(14)).toBe("14°");
+    expect(formatVotes(0)).toBe("0°");
+    expect(formatVotes(-2)).toBe("-2°");
   });
 });
